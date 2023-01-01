@@ -26,9 +26,9 @@ class Map3D {
         // 存储绘制的地图瓦片的四至范围
         // this.tilesBoundingSource = new Cesium.CustomDataSource("tilesBounding");
         // this.viewer.dataSources.add(this.tilesBoundingSource);
-        this.showAxis();
+        // this.showAxis();
         this.planeFit();
-        window.map3d = this.viewer;
+        window.map3d = this;
         //当视窗移动时打印新的视窗需要加载的瓦片范围
         // this.viewer.camera.changed.addEventListener(
         //   this.showLoadingTiles,
