@@ -279,6 +279,8 @@ class Map3D {
                 });
                 viewer.zoomTo(normalEntity);
             },
+            //计算坐标系间的转换参数
+            
             Cesium.ScreenSpaceEventType.RIGHT_CLICK,
             Cesium.KeyboardEventModifier.CTRL
         );
