@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
 import { planeFit } from "./utils";
 import * as turf from "@turf/turf";
+import { getRotation } from "./utils";
 window.turf = turf;
 
 class Map3D {
@@ -104,6 +105,7 @@ class Map3D {
                 viewer.entities.removeById("fitPlane");
                 viewer.entities.removeById("xnormal");
                 viewer.entities.removeById("znormal");
+                viewer.entities.removeById("ynormal");
                 document.getElementById("container").style.cursor = "crosshair";
                 const ray = viewer.camera.getPickRay(event.position);
                 const position = viewer.scene.globe.pick(ray, viewer.scene);
@@ -270,17 +272,64 @@ class Map3D {
                     id: "ynormal",
                     polyline: {
                         positions: [center, yPoint],
-                        material:
-                            new Cesium.PolylineArrowMaterialProperty(
-                                Cesium.Color.GREEN
-                            ),
+                        material: new Cesium.PolylineArrowMaterialProperty(
+                            Cesium.Color.GREEN
+                        ),
                         width: 6,
                     },
                 });
                 viewer.zoomTo(normalEntity);
+                //计算坐标系间的转换参数
+                //地形坐标系
+                const xNormal1 = [xNormal.x, xNormal.y, xNormal.z];
+                const yNormal1 = [yNormal.x, yNormal.y, yNormal.z];
+                const zNormal1 = [normal.x, normal.y, normal.z];
+                //北西天坐标系
+                debugger;
+                const modelMatrix = Cesium.Matrix4.inverse(
+                    Cesium.Transforms.northWestUpToFixedFrame(center),
+                    new Cesium.Matrix4()
+                );
+                const xNormal2 = Cesium.Matrix4.multiplyByVector(
+                    modelMatrix,
+                    new Cesium.Cartesian4(1, 0, 0, 1),
+                    new Cesium.Cartesian4()
+                );
+                const xNormal2_ = [xNormal2.x, xNormal2.y, xNormal2.z];
+                const yNormal2 = Cesium.Matrix4.multiplyByVector(
+                    modelMatrix,
+                    new Cesium.Cartesian4(0, 1, 0, 1),
+                    new Cesium.Cartesian4()
+                );
+                const yNormal2_ = [yNormal2.x, yNormal2.y, yNormal2.z];
+                const zNormal2 = Cesium.Matrix4.multiplyByVector(
+                    modelMatrix,
+                    new Cesium.Cartesian4(0, 0, 1, 1),
+                    new Cesium.Cartesian4()
+                );
+                const zNormal2_ = [zNormal2.x, zNormal2.y, zNormal2.z];
+                const rotationMatrixValues = getRotation(
+                    xNormal1,
+                    yNormal1,
+                    zNormal1,
+                    xNormal2_,
+                    yNormal2_,
+                    zNormal2_
+                );
+                const rotationMatrix = Cesium.Matrix3.fromArray(rotationMatrixValues);
+                let hpr = Cesium.Quaternion.fromRotationMatrix(rotationMatrix, new Cesium.Quaternion());
+                hpr = Cesium.HeadingPitchRoll.fromQuaternion(hpr);
+                const qua=Cesium.Transforms.headingPitchRollQuaternion(center,hpr,Cesium.Ellipsoid.WGS84,Cesium.Transforms.northWestUpToFixedFrame,new Cesium.Quaternion())
+                console.log(qua);
+                this.viewer.entities.add({
+                    position: center,
+                    orientation: qua,
+                    model: {
+                        uri: "car.gltf"
+                    }
+                });
             },
-            //计算坐标系间的转换参数
-            
+
             Cesium.ScreenSpaceEventType.RIGHT_CLICK,
             Cesium.KeyboardEventModifier.CTRL
         );
