@@ -1,7 +1,8 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
 import { planeFit } from "./utils";
-import * as mathjs from "mathjs";
+import * as turf from "@turf/turf";
+window.turf = turf;
 
 class Map3D {
     initMap(container) {
@@ -101,7 +102,8 @@ class Map3D {
         this.viewer.screenSpaceEventHandler.setInputAction(
             (event) => {
                 viewer.entities.removeById("fitPlane");
-                viewer.entities.removeById("normal");
+                viewer.entities.removeById("xnormal");
+                viewer.entities.removeById("znormal");
                 document.getElementById("container").style.cursor = "crosshair";
                 const ray = viewer.camera.getPickRay(event.position);
                 const position = viewer.scene.globe.pick(ray, viewer.scene);
@@ -117,7 +119,7 @@ class Map3D {
             Cesium.KeyboardEventModifier.CTRL
         );
         this.viewer.screenSpaceEventHandler.setInputAction(
-            (event) => {
+            async (event) => {
                 document.getElementById("container").style.cursor = "default";
                 let points = [];
                 pickDataSource.entities.values.forEach((entity) => {
@@ -141,7 +143,7 @@ class Map3D {
                             positions: points_,
                         },
                         material: new Cesium.ColorMaterialProperty(
-                            Cesium.Color.RED
+                            Cesium.Color.YELLOW
                         ),
                     },
                 });
@@ -150,7 +152,6 @@ class Map3D {
                     new Cesium.Cartesian3(a, b, c),
                     new Cesium.Cartesian3()
                 );
-                debugger;
                 const flag = Cesium.Cartesian3.dot(
                     new Cesium.Cartesian3(a, b, c),
                     new Cesium.Cartesian3(0, 0, 1)
@@ -179,13 +180,101 @@ class Map3D {
                     new Cesium.Cartesian3()
                 );
                 const normalEntity = viewer.entities.add({
-                    id: "normal",
+                    id: "znormal",
                     polyline: {
                         positions: [center, target],
                         material: new Cesium.PolylineArrowMaterialProperty(
                             Cesium.Color.BLUE
                         ),
-                        width: 3,
+                        width: 6,
+                    },
+                });
+                //基于输入的direction获取另外两个方向
+                let direction = parseFloat(prompt("请输入行车方向："));
+                if (direction > 180) {
+                    direction -= 360;
+                }
+                const center_ = [
+                    Cesium.Math.toDegrees(
+                        Cesium.Cartographic.fromCartesian(center).longitude
+                    ),
+                    Cesium.Math.toDegrees(
+                        Cesium.Cartographic.fromCartesian(center).latitude
+                    ),
+                ];
+                let xPoint = turf.rhumbDestination(
+                    turf.point(center_),
+                    100,
+                    direction,
+                    { units: "meters" }
+                );
+                xPoint = (
+                    await Cesium.sampleTerrainMostDetailed(
+                        this.viewer.terrainProvider,
+                        [
+                            Cesium.Cartographic.fromDegrees(
+                                xPoint.geometry.coordinates[0],
+                                xPoint.geometry.coordinates[1]
+                            ),
+                        ]
+                    )
+                )[0];
+                xPoint = Cesium.Cartesian3.fromRadians(
+                    xPoint.longitude,
+                    xPoint.latitude,
+                    xPoint.height
+                );
+                xPoint = new Cesium.Cartesian3(
+                    xPoint.x,
+                    xPoint.y,
+                    -(a * xPoint.x + b * xPoint.y + 1) / c
+                );
+                const xNormal = Cesium.Cartesian3.normalize(
+                    Cesium.Cartesian3.subtract(
+                        xPoint,
+                        center,
+                        new Cesium.Cartesian3()
+                    ),
+                    new Cesium.Cartesian3()
+                );
+                xPoint = Cesium.Ray.getPoint(
+                    new Cesium.Ray(center, xNormal),
+                    100,
+                    new Cesium.Cartesian3()
+                );
+                viewer.entities.add({
+                    id: "xnormal",
+                    polyline: {
+                        positions: [center, xPoint],
+                        material: new Cesium.PolylineArrowMaterialProperty(
+                            Cesium.Color.RED
+                        ),
+                        width: 6,
+                    },
+                });
+                //绘制y轴
+                const yNormal = Cesium.Cartesian3.normalize(
+                    Cesium.Cartesian3.cross(
+                        normal,
+                        xNormal,
+                        new Cesium.Cartesian3()
+                    ),
+                    new Cesium.Cartesian3()
+                );
+                let yPoint = Cesium.Ray.getPoint(
+                    new Cesium.Ray(center, yNormal),
+                    100,
+                    new Cesium.Cartesian3()
+                );
+                viewer.entities.add({
+                    id: "ynormal",
+                    polyline: {
+                        positions: [center, yPoint],
+                        material:
+                            new Cesium.PolylineArrowMaterialProperty(
+                                Cesium.Color.GREEN
+                            ),
+                        width: 6,
                     },
                 });
                 viewer.zoomTo(normalEntity);
