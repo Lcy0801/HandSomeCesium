@@ -23,8 +23,16 @@ class Map3D {
                 url: Cesium.IonResource.fromAssetId(1)
             })
         });
+        this.tilesBoundingSource = new Cesium.CustomDataSource("tilesBounding");
+        this.viewer.dataSources.add(this.tilesBoundingSource);
         // this.showAxis();
         this.planeFit();
+        window.map3d = this.viewer;
+        //当视窗移动时打印新的视窗需要加载的瓦片范围
+        this.viewer.camera.changed.addEventListener(
+          this.showLoadingTiles,
+          this
+        );
     }
     //绘制笛卡尔坐标系的三个轴
     showAxis(){
@@ -130,6 +138,43 @@ class Map3D {
             });
             viewer.zoomTo(normalEntity);
         }, Cesium.ScreenSpaceEventType.RIGHT_CLICK, Cesium.KeyboardEventModifier.CTRL);
+    }
+    showLoadingTiles() { 
+        const loadingTilesTree =
+            this.viewer.scene.globe._surface._tilesToRender;
+        const tilesList = [];
+        const tilesBoundings = [];
+        loadingTilesTree.forEach(item => {
+            tilesList.push([item._x, item._y, item._level]);
+            item._rectangle.level = item._level;
+            tilesBoundings.push(item._rectangle);
+        });
+        console.log("当前需要加载的瓦片列表:", tilesList);
+        console.log(tilesBoundings);
+        this.tilesBoundingSource.entities.removeAll();
+
+        tilesBoundings.forEach(rec => {
+            const center = Cesium.Rectangle.center(rec, new Cesium.Cartographic());
+            const position = Cesium.Cartesian3.fromRadians(center.longitude, center.latitude);
+            console.log(position);
+            this.tilesBoundingSource.entities.add({
+                position: position,
+                rectangle: {
+                    coordinates: rec,
+                    outlineColor: Cesium.Color.fromAlpha(Cesium.Color.RED, 0.5),
+                    outlineWidth: 20,
+                    outline: true,
+                    fill: false,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                },
+                label: {
+                    text: `${rec.level}`,
+                    font: "30px",
+                    fillColor: Cesium.Color.YELLOW,
+                    show: true,
+                },
+            });
+        });
     }
 
 }
