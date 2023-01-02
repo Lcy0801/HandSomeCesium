@@ -319,7 +319,7 @@ class Map3D {
                 const rotationMatrix = Cesium.Matrix3.fromArray(rotationMatrixValues);
                 let hpr = Cesium.Quaternion.fromRotationMatrix(rotationMatrix, new Cesium.Quaternion());
                 hpr = Cesium.HeadingPitchRoll.fromQuaternion(hpr);
-                const qua=Cesium.Transforms.headingPitchRollQuaternion(center,hpr,Cesium.Ellipsoid.WGS84,Cesium.Transforms.northWestUpToFixedFrame,new Cesium.Quaternion())
+                const qua=Cesium.Transforms.headingPitchRollQuaternion(center,hpr,Cesium.Ellipsoid.WGS84,Cesium.Transforms.localFrameToFixedFrameGenerator("north","west"),new Cesium.Quaternion())
                 console.log(qua);
                 this.viewer.entities.add({
                     position: center,
