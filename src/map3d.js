@@ -21,10 +21,16 @@ class Map3D {
             infoBox: false, // 隐藏点击 entity 信息框
             selectionIndicator: false, // 隐藏点击 entity 绿框
             shouldAnimate: true,
-            terrainProvider: new Cesium.CesiumTerrainProvider({
-                url: Cesium.IonResource.fromAssetId(1),
-            }),
+            // terrainProvider: new Cesium.CesiumTerrainProvider({
+            //     url: Cesium.IonResource.fromAssetId(1),
+            // }),
         });
+        const tileset = this.viewer.scene.primitives.add(
+            new Cesium.Cesium3DTileset({
+                url: Cesium.IonResource.fromAssetId(57590),
+            })
+        );
+        this.viewer.zoomTo(tileset);
         // 存储绘制的地图瓦片的四至范围
         // this.tilesBoundingSource = new Cesium.CustomDataSource("tilesBounding");
         // this.viewer.dataSources.add(this.tilesBoundingSource);
@@ -106,9 +112,11 @@ class Map3D {
                 viewer.entities.removeById("xnormal");
                 viewer.entities.removeById("znormal");
                 viewer.entities.removeById("ynormal");
+                viewer.entities.removeById("car");
                 document.getElementById("container").style.cursor = "crosshair";
-                const ray = viewer.camera.getPickRay(event.position);
-                const position = viewer.scene.globe.pick(ray, viewer.scene);
+                // const ray = viewer.camera.getPickRay(event.position);
+                // const position = viewer.scene.globe.pick(ray, viewer.scene);
+                const position = viewer.scene.pickPosition(event.position, new Cesium.Cartesian3());
                 pickDataSource.entities.add({
                     position: position,
                     point: {
@@ -154,16 +162,6 @@ class Map3D {
                     new Cesium.Cartesian3(a, b, c),
                     new Cesium.Cartesian3()
                 );
-                const flag = Cesium.Cartesian3.dot(
-                    new Cesium.Cartesian3(a, b, c),
-                    new Cesium.Cartesian3(0, 0, 1)
-                );
-                if (flag < 0) {
-                    normal = Cesium.Cartesian3.normalize(
-                        new Cesium.Cartesian3(-a, -b, -c),
-                        new Cesium.Cartesian3()
-                    );
-                }
                 let center = points_.reduce((preV, curV) => {
                     return Cesium.Cartesian3.add(
                         preV,
@@ -176,6 +174,16 @@ class Map3D {
                     points_.length,
                     new Cesium.Cartesian3()
                 );
+                const flag = Cesium.Cartesian3.dot(
+                    new Cesium.Cartesian3(a, b, c),
+                    center
+                );
+                if (flag < 0) {
+                    normal = Cesium.Cartesian3.normalize(
+                        new Cesium.Cartesian3(-a, -b, -c),
+                        new Cesium.Cartesian3()
+                    );
+                }
                 let target = Cesium.Ray.getPoint(
                     new Cesium.Ray(center, normal),
                     100,
@@ -206,25 +214,13 @@ class Map3D {
                 ];
                 let xPoint = turf.rhumbDestination(
                     turf.point(center_),
-                    100,
+                    1000,
                     direction,
                     { units: "meters" }
                 );
-                xPoint = (
-                    await Cesium.sampleTerrainMostDetailed(
-                        this.viewer.terrainProvider,
-                        [
-                            Cesium.Cartographic.fromDegrees(
-                                xPoint.geometry.coordinates[0],
-                                xPoint.geometry.coordinates[1]
-                            ),
-                        ]
-                    )
-                )[0];
-                xPoint = Cesium.Cartesian3.fromRadians(
-                    xPoint.longitude,
-                    xPoint.latitude,
-                    xPoint.height
+                xPoint = Cesium.Cartesian3.fromDegrees(
+                    xPoint.geometry.coordinates[0],
+                    xPoint.geometry.coordinates[1]
                 );
                 xPoint = new Cesium.Cartesian3(
                     xPoint.x,
@@ -285,51 +281,83 @@ class Map3D {
                 const yNormal1 = [yNormal.x, yNormal.y, yNormal.z];
                 const zNormal1 = [normal.x, normal.y, normal.z];
                 //北西天坐标系
-                debugger;
-                const modelMatrix = Cesium.Matrix4.inverse(
-                    Cesium.Transforms.northWestUpToFixedFrame(center),
-                    new Cesium.Matrix4()
-                );
-                const xNormal2 = Cesium.Matrix4.multiplyByVector(
+                const modelMatrix =
+                    Cesium.Transforms.northWestUpToFixedFrame(center);
+                //测试工具函数的正确性
+                const r = Cesium.Matrix4.getMatrix3(
                     modelMatrix,
-                    new Cesium.Cartesian4(1, 0, 0, 1),
-                    new Cesium.Cartesian4()
+                    new Cesium.Matrix3()
+                );
+                console.log(r);
+
+                const xNormal2 = Cesium.Matrix3.multiplyByVector(
+                    r,
+                    new Cesium.Cartesian3(1, 0, 0),
+                    new Cesium.Cartesian3()
                 );
                 const xNormal2_ = [xNormal2.x, xNormal2.y, xNormal2.z];
-                const yNormal2 = Cesium.Matrix4.multiplyByVector(
-                    modelMatrix,
-                    new Cesium.Cartesian4(0, 1, 0, 1),
-                    new Cesium.Cartesian4()
+                const yNormal2 = Cesium.Matrix3.multiplyByVector(
+                    r,
+                    new Cesium.Cartesian3(0, 1, 0),
+                    new Cesium.Cartesian3()
                 );
                 const yNormal2_ = [yNormal2.x, yNormal2.y, yNormal2.z];
-                const zNormal2 = Cesium.Matrix4.multiplyByVector(
-                    modelMatrix,
-                    new Cesium.Cartesian4(0, 0, 1, 1),
-                    new Cesium.Cartesian4()
+                const zNormal2 = Cesium.Matrix3.multiplyByVector(
+                    r,
+                    new Cesium.Cartesian3(0, 0, 1),
+                    new Cesium.Cartesian3()
                 );
                 const zNormal2_ = [zNormal2.x, zNormal2.y, zNormal2.z];
+                console.log(
+                    Cesium.Matrix3.fromArray(
+                    getRotation(
+                        xNormal2_,
+                        yNormal2_,
+                        zNormal2_,
+                        [1, 0, 0],
+                        [0, 1, 0],
+                        [0, 0, 1]
+                    ))
+                );
                 const rotationMatrixValues = getRotation(
                     xNormal1,
                     yNormal1,
                     zNormal1,
-                    xNormal2_,
-                    yNormal2_,
-                    zNormal2_
+                    [1, 0, 0],
+                    [0, 1, 0],
+                    [0, 0, 1],
                 );
-                const rotationMatrix = Cesium.Matrix3.fromArray(rotationMatrixValues);
-                let hpr = Cesium.Quaternion.fromRotationMatrix(rotationMatrix, new Cesium.Quaternion());
-                hpr = Cesium.HeadingPitchRoll.fromQuaternion(hpr);
-                const qua=Cesium.Transforms.headingPitchRollQuaternion(center,hpr,Cesium.Ellipsoid.WGS84,Cesium.Transforms.localFrameToFixedFrameGenerator("north","west"),new Cesium.Quaternion())
-                console.log(qua);
-                this.viewer.entities.add({
-                    position: center,
+                const rotationMatrix =
+                    Cesium.Matrix3.fromArray(rotationMatrixValues);
+                console.log(rotationMatrix);
+                let qua = Cesium.Quaternion.fromRotationMatrix(
+                    rotationMatrix,
+                    new Cesium.Quaternion()
+                );
+                // hpr = Cesium.HeadingPitchRoll.fromQuaternion(hpr);
+                // const qua = Cesium.Transforms.headingPitchRollQuaternion(
+                //     center,
+                //     hpr,
+                //     Cesium.Ellipsoid.WGS84,
+                //     Cesium.Transforms.localFrameToFixedFrameGenerator(
+                //         "north",
+                //         "west"
+                //     ),
+                //     new Cesium.Quaternion()
+                // );
+                console.log(center);
+                window.entity=this.viewer.entities.add({
+                    id: "car",
+                    position: this.viewer.scene.clampToHeight(center),
                     orientation: qua,
                     model: {
-                        uri: "car.gltf"
-                    }
+                        uri: "car.gltf",
+                        scale:10
+                    },
                 });
+                // this.viewer.trackedEntity = this.viewer.entities.getById("car");
+                this.viewer.zoomTo(this.viewer.entities.getById("car"));
             },
-
             Cesium.ScreenSpaceEventType.RIGHT_CLICK,
             Cesium.KeyboardEventModifier.CTRL
         );

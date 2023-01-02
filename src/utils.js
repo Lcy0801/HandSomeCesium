@@ -44,9 +44,9 @@ export const getRotation = (
     //单位化
     x1_ = math.divide(x1_, math.norm(x1_));
     let flag;
-    flag = math.dot(x1_, xNormal2);
+    flag = math.dot(x1_, xNormal1);
     if (flag < 0) {
-        // 交线方向应当与x2的方向相同
+        // 交线方向应当与x1的方向相同
         x1_ = math.multiply(x1_, -1);
     }
     //计算交线与x1的夹角
@@ -56,7 +56,7 @@ export const getRotation = (
     // 判断交线在x1的左侧还是右侧决定旋转的方向
     //flag>0：交线在右侧；flag<0：交线在左侧
     flag = math.dot(math.cross(x1_, xNormal1), zNormal1);
-    if (flag < 0) {
+    if (flag > 0) {
         // 逆时针旋转角度为正，顺时针旋转角度为负
         rAngle1 *= -1;
     }
@@ -67,7 +67,7 @@ export const getRotation = (
     );
     flag = math.dot(math.cross(zNormal1, zNormal2), x1_);
     // 判断旋转方向
-    if (flag > 0) {
+    if (flag < 0) {
         rAngle2 *= -1;
     }
     //计算第三次旋转的角度
