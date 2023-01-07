@@ -132,13 +132,20 @@ class Map3D {
                     new Cesium.JulianDate()
                 );
                 this.viewer.tracePoints = [];
-                this.x = new Cesium.CustomDataSource("xx");
-                this.viewer.dataSources.add(this.x);
 
-                this.x.entities.add({
+                this.viewer.entities.add({
                     id: "car",
                     position: carPosition,
-                    orientation:new Cesium.Quaternion(0,0,0,1),
+                    orientation: new Cesium.Quaternion(0, 0, 0, 1),
+                    model: {
+                        uri: "car.gltf",
+                        scale: 5,
+                    },
+                });
+                this.viewer.entities.add({
+                    id: "car1",
+                    position: new Cesium.Cartesian3(),
+                    orientation: new Cesium.Quaternion(0, 0, 0, 1),
                     model: {
                         uri: "car.gltf",
                         scale: 5,
@@ -146,8 +153,7 @@ class Map3D {
                 });
                 this.viewer.cancelTick =
                     this.viewer.clock.onTick.addEventListener(() => {
-                        const carEntity = this.x.entities.getById("car");
-                        debugger;
+                        const carEntity = this.viewer.entities.getById("car");
                         const carPos = carEntity.position.getValue(
                             this.viewer.clock.currentTime
                         );
@@ -165,19 +171,31 @@ class Map3D {
                                 Cesium.Cartographic.fromCartesian(carPos_)
                                     .latitude
                             );
-                            const boundPoints = getBoundingPoints(lon, lat, 1.5);
-                            const boundPoints_ = boundPoints.map(point => {
-                                const point_ = Cesium.Cartesian3.fromDegrees(point[0], point[1]);
-                                const point__ = this.viewer.scene.clampToHeight(point_);
+                            const boundPoints = getBoundingPoints(
+                                lon,
+                                lat,
+                                1.5
+                            );
+                            const boundPoints_ = boundPoints.map((point) => {
+                                const point_ = Cesium.Cartesian3.fromDegrees(
+                                    point[0],
+                                    point[1]
+                                );
+                                const point__ =
+                                    this.viewer.scene.clampToHeight(point_);
                                 return [point__.x, point__.y, point__.z];
                             });
                             const [a, b, c] = planeFit(boundPoints_);
                             let zNormal = new Cesium.Cartesian3(a, b, c);
                             let flag = Cesium.Cartesian3.dot(zNormal, carPos_);
-                            if (flag < 0) { 
-                                zNormal = new Cesium.Cartesian3(-a, -b,-c);
+                            if (flag < 0) {
+                                zNormal = new Cesium.Cartesian3(-a, -b, -c);
                             }
-                            let yNormal = Cesium.Cartesian3.cross(zNormal, carDirection, new Cesium.Cartesian3());
+                            let yNormal = Cesium.Cartesian3.cross(
+                                zNormal,
+                                carDirection,
+                                new Cesium.Cartesian3()
+                            );
                             let xNormal = [
                                 carDirection.x,
                                 carDirection.y,
@@ -185,19 +203,39 @@ class Map3D {
                             ];
                             yNormal = [yNormal.x, yNormal.y, yNormal.z];
                             zNormal = [zNormal.x, zNormal.y, zNormal.z];
-                            const rotationValues = getRotation(xNormal, yNormal, zNormal, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-                            const rotationMatirx = Cesium.Matrix3.fromArray(rotationValues);
-                            const rotationQua = Cesium.Quaternion.fromRotationMatrix(rotationMatirx, new Cesium.Quaternion());
+                            const rotationValues = getRotation(
+                                xNormal,
+                                yNormal,
+                                zNormal,
+                                [1, 0, 0],
+                                [0, 1, 0],
+                                [0, 0, 1]
+                            );
+                            const rotationMatirx =
+                                Cesium.Matrix3.fromArray(rotationValues);
+                            const rotationQua =
+                                Cesium.Quaternion.fromRotationMatrix(
+                                    rotationMatirx,
+                                    new Cesium.Quaternion()
+                                );
                             const scale = new Cesium.Cartesian3(
                                 carEntity.model.scale._value,
                                 carEntity.model.scale._value,
                                 carEntity.model.scale._value
                             );
-                            const trs = new Cesium.TranslationRotationScale(carPos_, rotationQua, scale);
-                            const modelMatrix = Cesium.Matrix4.fromTranslationRotationScale(trs, new Cesium.Matrix4());
-                            if (carEntity.model._primitive) { 
-                                carEntity.model._primitive.modelMatrix = modelMatrix;
-                            }
+                            const trs = new Cesium.TranslationRotationScale(
+                                carPos_,
+                                rotationQua,
+                                scale
+                            );
+                            const modelMatrix =
+                                Cesium.Matrix4.fromTranslationRotationScale(
+                                    trs,
+                                    new Cesium.Matrix4()
+                                );
+                            let x = this.viewer.entities.getById("car1");
+                            x.position = carPos;
+                            x.orientation = rotationQua;
                         }
                     }, this);
                 this.viewer.clock.shouldAnimate = true;
