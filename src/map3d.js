@@ -9,62 +9,112 @@ class Map3D {
 			animation: false,
 			shouldAnimate: true,
 		});
-		// 自定义顶点着色器和片源着色器
-		let appearance = new Cesium.MaterialAppearance({
-			vertexShaderSource: `
-                attribute vec3 position3DHigh;  
-                attribute vec3 position3DLow;
-                attribute float batchId;
-                varying vec4 v_positionEC;
- 
-                attribute vec4 color;
-                varying vec4 v_color;
- 
-                void main()
-                {
-                    v_color = color;
-                    vec4 p = czm_computePosition(); // 获取模型相对于视点位置
-                    vec4 eyePosition = czm_modelViewRelativeToEye * p; // 由模型坐标 得到视点坐标
-                    v_positionEC =  czm_inverseModelView * eyePosition;   // 视点在 模型坐标系中的位置
-                    gl_Position = czm_modelViewProjection * v_positionEC;  // 视点坐标转为屏幕坐标
-                }
-                    `,
-			fragmentShaderSource: `           
-                varying vec4 v_positionEC;
-                varying vec3 v_normalEC;
-                varying vec4 v_color;
-                void main() {
-                  float l = sqrt(pow(v_positionEC.x,2.0) + pow(v_positionEC.y,2.0) + pow(v_positionEC.z,2.0)); // 距离模型坐标系原点的距离
-                  float cy3 = fract(1.0-(v_positionEC.z+500.0)/1000.0); 
-                  float alpha = cy3;
-                  gl_FragColor = vec4(v_color.rgb,alpha);
-                }
-                `,
-		});
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(121, 30),
+			new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-15), 1000)
+		);
+		this.drawDataSource = new Cesium.CustomDataSource("draw");
+		this.drawPoints = [];
+		this.viewer.dataSources.add(this.drawDataSource);
+		this.viewer.screenSpaceEventHandler.setInputAction(
+			(event) => {
+				this.viewer.scene.primitives.remove(this.wall);
+				const ray = this.viewer.camera.getPickRay(event.position);
+				const pos = this.viewer.scene.globe.pick(
+					ray,
+					this.viewer.scene
+				);
+				this.drawDataSource.entities.add({
+					position: pos,
+					point: {
+						color: Cesium.Color.RED,
+						pixelSize: 5,
+					},
+				});
+				this.drawPoints.push(pos);
+			},
+			Cesium.ScreenSpaceEventType.LEFT_CLICK,
+			Cesium.KeyboardEventModifier.ALT
+		);
+		this.viewer.screenSpaceEventHandler.setInputAction(
+			(event) => {
+				if (this.drawPoints.length >= 3) {
+					this.dynamicWall();
+				}
+				this.drawPoints = [];
+				this.drawDataSource.entities.removeAll();
+			},
+			Cesium.ScreenSpaceEventType.RIGHT_CLICK,
+			Cesium.KeyboardEventModifier.ALT
+		);
+	}
 
-		let primitive = this.viewer.scene.primitives.add(
+	dynamicWall() {
+		// 计算重心坐标
+		let center = this.drawPoints.reduce((pre, curV) => {
+			return Cesium.Cartesian3.add(pre, curV, new Cesium.Cartesian3());
+		}, new Cesium.Cartesian3());
+		center = Cesium.Cartesian3.divideByScalar(center, this.drawPoints.length, new Cesium.Cartesian3());
+		let modelMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+		modelMatrix = Cesium.Matrix4.inverse(modelMatrix,new Cesium.Matrix4());
+		this.drawPoints = [...this.drawPoints, this.drawPoints[0]];
+		const minHeight = 0;
+		const maxHeight = 1000;
+		const wallGeometry = new Cesium.WallGeometry({
+			positions: this.drawPoints,
+			maximumHeights: this.drawPoints.map(() => {
+				return maxHeight;
+			}),
+			minimumHeights: this.drawPoints.map(() => {
+				return minHeight;
+			}),
+		});
+		this.wall = this.viewer.scene.primitives.add(
 			new Cesium.Primitive({
-				geometryInstances: new Cesium.GeometryInstance({
-					geometry: Cesium.BoxGeometry.fromDimensions({
-						vertexFormat:
-							Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-						dimensions: new Cesium.Cartesian3(300.0, 300.0, 1000.0),
-					}),
-					modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(
-						Cesium.Cartesian3.fromDegrees(118.999861111111, 29, 0)
-					),
+				geometryInstances: {
+					geometry: wallGeometry,
+					modelMatrix: Cesium.Matrix4.IDENTITY,
 					attributes: {
 						color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-							Cesium.Color.YELLOW.withAlpha(1)
+							Cesium.Color.RED
 						),
 					},
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							uniforms: {
+								modelMatrix: modelMatrix,
+								maxHeight: maxHeight,
+								minHeight: minHeight,
+							},
+						},
+					}),
+					vertexShaderSource: `
+						attribute vec4 color;
+						varying vec4 v_color;
+						varying x
+						void main()
+						{
+							vec4 p = czm_computePosition();
+							vec4 eyePosition = czm_modelViewRelativeToEye * p;
+							p =  czm_inverseModelView * eyePosition;
+							vec4 worldPosition= czm_model * p;
+							vec4 enuPosition=modelMatrix*worldPosition;
+							float u=max(enuPosition.z,minHeight);
+							float alpha=fract((u-minHeight)/(maxHeight-minHeight));
+							v_color=vec4(color.rgb,alpha)
+							gl_Position = czm_modelViewProjection * p;
+						}
+					`,
+					fragmentShaderSource: `
+						varying vec4 v_color;
+						void main() {
+							gl_FragColor = v_color;
+						}
+					`,
 				}),
-				appearance: appearance,
 			})
-		);
-		this.viewer.camera.lookAt(
-			Cesium.Cartesian3.fromDegrees(118.999861111111, 29, 500),
-			new Cesium.HeadingPitchRange(0, -10, 3000)
 		);
 	}
 }
