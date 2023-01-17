@@ -9,6 +9,7 @@ class Map3D {
             animation:false,
             shouldAnimate: true
         });
-    }
+	}
+	
 }
 export default new Map3D();
