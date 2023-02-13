@@ -57,54 +57,30 @@ class Map3D {
 		this.viewer.zoomTo(entity);
 	}
 	//通过自定义着色器
-    drawRadarPrimitive() {
+	//可以基于纹理坐标来计算相对的位置关系
+	drawRadarPrimitive() {
 		const minRadius = 10.0;
 		const maxRadius = 100.0;
 		const center = Cesium.Cartesian3.fromDegrees(120, 31, 100);
-		const shderSource = `
+		const shaderSource = `
             czm_material czm_getMaterial(czm_materialInput materialInput)
             {
                 czm_material m = czm_getDefaultMaterial(materialInput);
-                m.diffuse = vec3(0.5);
-                m.specular = 0.5;
+                vec2 st = materialInput.st;
+                vec2 center_st = vec2(0.5,0.5);
+                float r = mod(czm_frameNumber,200.0) / 200.0;
+                float dist = distance(st,center_st);
+                if (dist > r){
+                    m.alpha = 0.0;
+                }
+                else{
+                    m.alpha = dist / r;
+                }
+                m.diffuse = vec3(1,0,0);
                 return m;
             }
         `;
-		const vertexShaderSource = `
-            attribute vec3 position3DHigh;
-            attribute vec3 position3DLow;
-            attribute vec3 normal;
-            attribute vec2 st;
-            attribute float batchId;
-            vec3 center =vec3( -2736038.438081371, 4738957.586218331, 3265945.020461434);
 
-            varying vec4 v_color;
-            void main()
-            {
-                vec4 p = czm_computePosition();
-                vec4 eyePosition = czm_modelViewRelativeToEye * p;
-                p =  czm_inverseModelView * eyePosition;
-                vec4 worldPosition = czm_model * p;
-                vec4 centerPostion = vec4(center,1.0);
-                vec4 diff = worldPosition - centerPostion;
-                float dist = sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
-                if (dist > 40.0)
-                {
-                    v_color=vec4(1,0,0,1);
-                }
-                else
-                {
-                    v_color=vec4(0,1,0,1);
-                }
-                gl_Position = czm_modelViewProjection * p;
-            }
-        `;
-		const fragmentShaderSource = `
-            varying vec4 v_color;
-            void main() {
-                gl_FragColor = v_color;
-            }
-        `;
 		this.viewer.scene.primitives.add(
 			new Cesium.Primitive({
 				geometryInstances: {
@@ -125,10 +101,9 @@ class Map3D {
 								maxR: maxRadius,
 								center: center,
 							},
+							source: shaderSource,
 						},
 					}),
-					vertexShaderSource: vertexShaderSource,
-					fragmentShaderSource: fragmentShaderSource,
 				}),
 			})
 		);
