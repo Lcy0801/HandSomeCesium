@@ -9,10 +9,11 @@ class Map3D {
 			animation: false,
 			shouldAnimate: true,
 		});
-		this.drawRadar();
-    }
-    //通过纹理贴图
-	drawRadar() {
+		// this.drawRadarEntity();
+		this.drawRadarPrimitive();
+	}
+	//通过纹理贴图
+	drawRadarEntity() {
 		const minRadius = 0;
 		const maxRadius = 100;
 		let majorR = minRadius;
@@ -54,8 +55,87 @@ class Map3D {
 			},
 		});
 		this.viewer.zoomTo(entity);
-    }
-    //通过自定义着色器
-    
+	}
+	//通过自定义着色器
+    drawRadarPrimitive() {
+		const minRadius = 10.0;
+		const maxRadius = 100.0;
+		const center = Cesium.Cartesian3.fromDegrees(120, 31, 100);
+		const shderSource = `
+            czm_material czm_getMaterial(czm_materialInput materialInput)
+            {
+                czm_material m = czm_getDefaultMaterial(materialInput);
+                m.diffuse = vec3(0.5);
+                m.specular = 0.5;
+                return m;
+            }
+        `;
+		const vertexShaderSource = `
+            attribute vec3 position3DHigh;
+            attribute vec3 position3DLow;
+            attribute vec3 normal;
+            attribute vec2 st;
+            attribute float batchId;
+            vec3 center =vec3( -2736038.438081371, 4738957.586218331, 3265945.020461434);
+
+            varying vec4 v_color;
+            void main()
+            {
+                vec4 p = czm_computePosition();
+                vec4 eyePosition = czm_modelViewRelativeToEye * p;
+                p =  czm_inverseModelView * eyePosition;
+                vec4 worldPosition = czm_model * p;
+                vec4 centerPostion = vec4(center,1.0);
+                vec4 diff = worldPosition - centerPostion;
+                float dist = sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+                if (dist > 40.0)
+                {
+                    v_color=vec4(1,0,0,1);
+                }
+                else
+                {
+                    v_color=vec4(0,1,0,1);
+                }
+                gl_Position = czm_modelViewProjection * p;
+            }
+        `;
+		const fragmentShaderSource = `
+            varying vec4 v_color;
+            void main() {
+                gl_FragColor = v_color;
+            }
+        `;
+		this.viewer.scene.primitives.add(
+			new Cesium.Primitive({
+				geometryInstances: {
+					geometry: new Cesium.EllipseGeometry({
+						center: center,
+						semiMajorAxis: 100,
+						semiMinorAxis: 100,
+						height: 100,
+					}),
+					modelMatrix: Cesium.Matrix4.IDENTITY,
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							type: "radarSwap",
+							uniforms: {
+								minR: minRadius,
+								maxR: maxRadius,
+								center: center,
+							},
+						},
+					}),
+					vertexShaderSource: vertexShaderSource,
+					fragmentShaderSource: fragmentShaderSource,
+				}),
+			})
+		);
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(120, 31),
+			new Cesium.HeadingPitchRange(0, -45, 100)
+		);
+	}
 }
 export default new Map3D();
