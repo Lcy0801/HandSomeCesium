@@ -10,7 +10,8 @@ class Map3D {
 			shouldAnimate: true,
 		});
 		// this.drawRadarEntity();
-		this.drawRadarPrimitive();
+		// this.drawRadarPrimitive();
+		this.drawScanRadarPrimitive();
 	}
 	//通过纹理贴图
 	drawRadarEntity() {
@@ -59,8 +60,6 @@ class Map3D {
 	//通过自定义着色器
 	//可以基于纹理坐标来计算相对的位置关系
 	drawRadarPrimitive() {
-		const minRadius = 10.0;
-		const maxRadius = 100.0;
 		const center = Cesium.Cartesian3.fromDegrees(120, 31, 100);
 		const shaderSource = `
             czm_material czm_getMaterial(czm_materialInput materialInput)
@@ -68,7 +67,7 @@ class Map3D {
                 czm_material m = czm_getDefaultMaterial(materialInput);
                 vec2 st = materialInput.st;
                 vec2 center_st = vec2(0.5,0.5);
-                float r = mod(czm_frameNumber,200.0) / 200.0;
+                float r = mod(czm_frameNumber,framePeriod) / framePeriod;
                 float dist = distance(st,center_st);
                 if (dist > r){
                     m.alpha = 0.0;
@@ -99,7 +98,77 @@ class Map3D {
 							uniforms: {
 								minR: minRadius,
 								maxR: maxRadius,
-								center: center,
+								framePeriod: 300.0,
+							},
+							source: shaderSource,
+						},
+					}),
+				}),
+			})
+		);
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(120, 31),
+			new Cesium.HeadingPitchRange(0, -45, 100)
+		);
+	}
+	//自定义着色器实现扇形雷达
+	drawScanRadarPrimitive() {
+		const center = Cesium.Cartesian3.fromDegrees(120, 31, 100);
+		const shaderSource = `
+            czm_material czm_getMaterial(czm_materialInput materialInput)
+            {
+                czm_material m = czm_getDefaultMaterial(materialInput);
+                vec2 st = materialInput.st;
+                vec2 center_st = vec2(0.5,0.5);
+                float startAngle = mod(czm_frameNumber * scanSpeed,360.0);
+				if (startAngle < 0.0)
+				{
+					startAngle = startAngle + 360.0;
+				}
+				float x1 = 0.5 + cos(radians(startAngle));
+				float y1 = 0.5 + sin(radians(startAngle));
+				vec3 vStart = vec3(x1 - 0.5 , y1 - 0.5 , 0.0);
+				vStart = normalize(vStart);
+				vec3 vFrag = vec3(st.x - 0.5 , st.y - 0.5 , 0.0);
+				vFrag = normalize(vFrag);
+				float angle = degrees(acos(dot(vStart , vFrag)));
+				float flag = cross(vFrag , vStart).z;
+				if (flag >= 0.0)
+				{
+					angle = 360.0 - flag;
+				}
+				m.alpha = 0.0;
+				if (angle <= scanAngle)
+				{
+					m.alpha = angle / scanAngle;
+					if(scanSpeed < 0.0)
+					{
+						m.alpha = 1.0 - m.alpha;
+					}
+				}
+                m.diffuse = vec3(1,0,0);
+                return m;
+            }
+        `;
+
+		this.viewer.scene.primitives.add(
+			new Cesium.Primitive({
+				geometryInstances: {
+					geometry: new Cesium.EllipseGeometry({
+						center: center,
+						semiMajorAxis: 1000,
+						semiMinorAxis: 1000,
+						height: 0,
+					}),
+					modelMatrix: Cesium.Matrix4.IDENTITY,
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							type: "radarSwap",
+							uniforms: {
+								scanAngle: 60.0,
+								scanSpeed: -1.0,
 							},
 							source: shaderSource,
 						},
