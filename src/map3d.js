@@ -199,7 +199,7 @@ class Map3D {
 			czm_material czm_getMaterial(czm_materialInput materialInput)
             {
                 czm_material m = czm_getDefaultMaterial(materialInput);
-				m.alpha = 1.0 - materialInput.st.y;
+				m.alpha = (1.0 - materialInput.st.y) * 0.8;
                 m.diffuse = vec3(0,1,0);
 				float startHeight = mod(czm_frameNumber * scanSpeed , maxHeight - minHeight -scanHeight) + minHeight;
 				float endHeight = min(startHeight + scanHeight , maxHeight);
@@ -212,6 +212,7 @@ class Map3D {
                 return m;
             }
 		`;
+		
 		this.viewer.scene.primitives.add(
 			new Cesium.Primitive({
 				geometryInstances: {
