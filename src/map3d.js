@@ -11,7 +11,8 @@ class Map3D {
 		});
 		// this.drawRadarEntity();
 		// this.drawRadarPrimitive();
-		this.drawScanRadarPrimitive();
+		// this.drawScanRadarPrimitive();
+		this.drawFencePrimitive();
 	}
 	//通过纹理贴图
 	drawRadarEntity() {
@@ -179,6 +180,67 @@ class Map3D {
 		this.viewer.camera.lookAt(
 			Cesium.Cartesian3.fromDegrees(120, 31),
 			new Cesium.HeadingPitchRange(0, -45, 100)
+		);
+	}
+	//自定义着色器实现电子围栏
+	drawFencePrimitive() {
+		const positions = [
+			Cesium.Cartesian3.fromDegrees(120, 30),
+			Cesium.Cartesian3.fromDegrees(121, 30),
+			Cesium.Cartesian3.fromDegrees(121, 31),
+			Cesium.Cartesian3.fromDegrees(120, 31),
+			Cesium.Cartesian3.fromDegrees(120, 30),
+		];
+		const maxHeight = 50000;
+		const minHeight = 0;
+		const maxHeights = new Array(positions.length).fill(maxHeight);
+		const minHeights = new Array(positions.length).fill(minHeight);
+		const shaderSource = `
+			czm_material czm_getMaterial(czm_materialInput materialInput)
+            {
+                czm_material m = czm_getDefaultMaterial(materialInput);
+				m.alpha = 1.0 - materialInput.st.y;
+                m.diffuse = vec3(0,1,0);
+				float startHeight = mod(czm_frameNumber * scanSpeed , maxHeight - minHeight -scanHeight) + minHeight;
+				float endHeight = min(startHeight + scanHeight , maxHeight);
+				float tMin = (startHeight - minHeight) / (maxHeight - minHeight);
+				float tMax = (endHeight - minHeight) / (maxHeight - minHeight);
+				if (materialInput.st.y >= tMin && materialInput.st.y <= tMax)
+				{
+					m.alpha = (materialInput.st.y - tMin) / (tMax - tMin);
+				}
+                return m;
+            }
+		`;
+		this.viewer.scene.primitives.add(
+			new Cesium.Primitive({
+				geometryInstances: {
+					geometry: new Cesium.WallGeometry({
+						positions: positions,
+						maximumHeights: maxHeights,
+						minimumHeights:minHeights
+					}),
+					modelMatrix: Cesium.Matrix4.IDENTITY,
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							type: "electronicFence",
+							uniforms: {
+								maxHeight: maxHeight,
+								minHeight:minHeight,
+								scanHeight: 20000.0,
+								scanSpeed: 500.0
+							},
+							source: shaderSource,
+						},
+					}),
+				}),
+			})
+		);
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
+			new Cesium.HeadingPitchRange(0, -15, 100000)
 		);
 	}
 }
