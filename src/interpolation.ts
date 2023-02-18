@@ -18,8 +18,8 @@ interface DeltaLonLat {
 class TraceInterpolation {
 	public start: TracePoint;
 	public end: TracePoint;
-	public lonFunc: Record<string, any>;
-	public latFunc: Record<string, any>;
+	public lonFunc: (t: number) => number;
+	public latFunc: (t: number) => number;
 	public t0: number;
 	constructor(start: TracePoint, end: TracePoint, t0: number) {
 		this.start = { ...start };
@@ -73,13 +73,17 @@ class TraceInterpolation {
 			this.end.longitude,
 			endDeltaLonLat.dLon,
 		]);
-		const lonFunc_ = mathjs.multiply(mathjs.inv(A), lonb);
-		this.lonFunc = {
-			a: lonFunc_.subset(mathjs.index(0)),
-			b: lonFunc_.subset(mathjs.index(1)),
-			c: lonFunc_.subset(mathjs.index(2)),
-			d: lonFunc_.subset(mathjs.index(3)),
+		const lonFunc = mathjs.multiply(mathjs.inv(A), lonb);
+		const lonFunc_ = {
+			a: lonFunc.subset(mathjs.index(0)) as unknown as number,
+			b: lonFunc.subset(mathjs.index(1)) as unknown as number,
+			c: lonFunc.subset(mathjs.index(2)) as unknown as number,
+			d: lonFunc.subset(mathjs.index(3)) as unknown as number,
 		};
+		this.lonFunc = (t: number): number => { 
+			const dt = t - this.t0;
+			return lonFunc_.a * dt * dt * dt + lonFunc_.b * dt * dt + lonFunc_.c * dt + lonFunc_.d;
+		}
 		// 纬度函数
 		const latb = mathjs.matrix([
 			this.start.latitude,
@@ -87,27 +91,27 @@ class TraceInterpolation {
 			this.end.latitude,
 			endDeltaLonLat.dLat,
 		]);
-		const latFunc_ = mathjs.multiply(mathjs.inv(A), latb);
-		this.latFunc = {
-			a: latFunc_.subset(mathjs.index(0)),
-			b: latFunc_.subset(mathjs.index(1)),
-			c: latFunc_.subset(mathjs.index(2)),
-			d: latFunc_.subset(mathjs.index(3)),
+		const latFunc = mathjs.multiply(mathjs.inv(A), latb);
+		const latFunc_ = {
+			a:latFunc.subset(mathjs.index(0)) as unknown as number,
+			b:latFunc.subset(mathjs.index(1)) as unknown as number,
+			c:latFunc.subset(mathjs.index(2)) as unknown as number,
+			d:latFunc.subset(mathjs.index(3)) as unknown as number,
 		};
+		this.latFunc = (t: number):number => { 
+			const dt = t - this.t0;
+			return (
+				latFunc_.a * dt * dt * dt +
+				latFunc_.b * dt * dt +
+				latFunc_.c * dt +
+				latFunc_.d
+			)
+		}
 		return;
 	}
     public getCoordinate(t: number): Record<string, number> {
-        t -= this.t0;
-		const lon =
-			this.lonFunc.a * t * t * t +
-			this.lonFunc.b * t * t +
-			this.lonFunc.c * t +
-			this.lonFunc.d;
-		const lat =
-			this.latFunc.a * t * t * t +
-			this.latFunc.b * t * t +
-			this.latFunc.c * t +
-			this.latFunc.d;
+		const lon = this.lonFunc(t);
+		const lat = this.latFunc(t);
 		return {
 			longitude: lon,
 			latitude: lat,
