@@ -160,7 +160,7 @@ class Map3D {
 						traceLine,
 						...tracePointDataSource.entities.values,
 						...interTracePointSource.entities.values,
-						this.carEntity
+						this.carEntity,
 					]
 				)
 				.then((value) => {
@@ -191,7 +191,7 @@ class Map3D {
 			new Date(t0)
 		);
 	}
-	clampToTerrain(position, heading) {
+	async clampToTerrain(position, heading) {
 		const headingToBearing = (heading) => {
 			return heading <= 180 ? heading : heading - 360;
 		};
@@ -267,7 +267,12 @@ class Map3D {
 				...this.interTracePointSource.entities.values,
 			]
 		);
-		Promise.all([poiPromise1, poiPromise2, poiPromise3, poiPromise4])
+		const resHPR = await Promise.all([
+			poiPromise1,
+			poiPromise2,
+			poiPromise3,
+			poiPromise4,
+		])
 			.then((values) => {
 				const positions = values.map((value) => {
 					const poiOnTerrain = value[0];
@@ -284,12 +289,32 @@ class Map3D {
 				const pointProjectToPlane = (x, y, z, a, b, c, d) => {
 					const dist =
 						(a * x + b * y + c * z + d) / (a * a + b * b + c * c);
-					return [x - dist * a, y - dist * b, z - dist * c];
+					return [x - dist * a, y - dist * b, z - dist * c, dist];
 				};
+				// 将heading方位的点投影至平面
+				const point1_ = Cesium.Cartographic.toCartesian(values[0][0]);
+				const [x1, y1, z1,dist1] = pointProjectToPlane(
+					point1_.x,
+					point1_.y,
+					point1_.z,
+					a,
+					b,
+					c,
+					1
+				);
+				const v1 = Cesium.Cartesian3.normalize(Cesium.Cartesian3.subtract(point1_, new Cesium.Cartesian3(x1, y1, z1), new Cesium.Cartesian3()), new Cesium.Cartesian3());
+				const v2 = Cesium.Cartesian3.normalize(point1_, new Cesium.Cartesian3());
+				const dist = Math.abs(dist1 / Cesium.Cartesian3.dot(v1, v2));
+				const point1__ = Cesium.Cartesian3.subtract(point1_, dist * v2, new Cesium.Cartesian3());
+				const vx = Cesium.Cartesian3.normalize(Cesium.Cartesian3.subtract(point1__, position, new Cesium.Cartesian3()),new Cesium.Cartesian3());
+				const vz = Cesium.Cartesian3.normalize(new Cesium.Cartesian3(a, b, c), new Cesium.Cartesian3());
+				const vy = Cesium.Cartesian3.normalize(Cesium.Cartesian3.cross(vz, vx, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+				
 			})
 			.catch(() => {
 				return undefined;
 			});
+		return resHPR;
 	}
 }
 export default new Map3D();
