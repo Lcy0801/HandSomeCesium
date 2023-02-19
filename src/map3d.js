@@ -4,6 +4,7 @@ import traceData from "./data/Trace_.json";
 import * as turf from "@turf/turf";
 import TraceInterpolation from "./interpolation";
 import { planeFit, getRotation } from "./utils";
+window.planeFit = planeFit;
 
 class Map3D {
 	initMap(container) {
@@ -27,6 +28,8 @@ class Map3D {
 		window.viewer = this.viewer;
 		window.Cesium = Cesium;
 		//等待10s后开始绘制轨迹，确保轨迹区域的地形瓦片已经加载完成能够准确的采集地形高度
+		this.otherSource = new Cesium.CustomDataSource("otherSource");
+		this.viewer.dataSources.add(this.otherSource);
 		setTimeout(() => {
 			this.carMove();
 		}, 10000);
@@ -40,6 +43,7 @@ class Map3D {
 				uri: "car3.gltf",
 			},
 		});
+		this.viewer.trackedEntity = this.carEntity;
 		const points = traceData.features;
 		const tracePointDataSource = new Cesium.CustomDataSource("tracePoint");
 		this.tracePointDataSource = tracePointDataSource;
@@ -161,9 +165,10 @@ class Map3D {
 						...tracePointDataSource.entities.values,
 						...interTracePointSource.entities.values,
 						this.carEntity,
+						...this.otherSource.entities.values,
 					]
 				)
-				.then((value) => {
+				.then(async (value) => {
 					const position_ = Cesium.Cartographic.toCartesian(value[0]);
 					const qua = Cesium.Transforms.headingPitchRollQuaternion(
 						position_,
@@ -174,9 +179,11 @@ class Map3D {
 							"west"
 						)
 					);
+					const qua_ = await this.clampToTerrain(position_, heading);
+					console.log(qua_, "基于贴地算法计算的姿态");
 					this.carEntity.position = position_;
-					this.carEntity.orientation = qua;
-					const entity = interTracePointSource.entities.add({
+					this.carEntity.orientation = qua_;
+					interTracePointSource.entities.add({
 						position: position_,
 						point: {
 							pixelSize: 3,
@@ -211,9 +218,11 @@ class Map3D {
 				),
 			],
 			[
-				traceLine,
+				this.traceLine,
 				...this.tracePointDataSource.entities.values,
 				...this.interTracePointSource.entities.values,
+				...this.otherSource.entities.values,
+				this.carEntity,
 			]
 		);
 		const bearing2 = headingToBearing((heading + 90) % 360);
@@ -228,9 +237,11 @@ class Map3D {
 				),
 			],
 			[
-				traceLine,
+				this.traceLine,
 				...this.tracePointDataSource.entities.values,
 				...this.interTracePointSource.entities.values,
+				...this.otherSource.entities.values,
+				this.carEntity,
 			]
 		);
 		const bearing3 = headingToBearing((heading + 180) % 360);
@@ -245,9 +256,11 @@ class Map3D {
 				),
 			],
 			[
-				traceLine,
+				this.traceLine,
 				...this.tracePointDataSource.entities.values,
 				...this.interTracePointSource.entities.values,
+				...this.otherSource.entities.values,
+				this.carEntity,
 			]
 		);
 		const bearing4 = headingToBearing((heading + 270) % 360);
@@ -262,9 +275,11 @@ class Map3D {
 				),
 			],
 			[
-				traceLine,
+				this.traceLine,
 				...this.tracePointDataSource.entities.values,
 				...this.interTracePointSource.entities.values,
+				...this.otherSource.entities.values,
+				this.carEntity,
 			]
 		);
 		const resHPR = await Promise.all([
@@ -281,10 +296,27 @@ class Map3D {
 					return poiOnTerrain_;
 				});
 				positions.push(position);
+				positions.forEach((poi) => {
+					this.otherSource.entities.add({
+						position: poi,
+						point: {
+							pixelSize: 5,
+							color: Cesium.Color.GREENYELLOW,
+						},
+					});
+				});
+				debugger;
 				const positions_ = positions.map((position) => {
 					return [position.x, position.y, position.z];
 				});
-				const [a, b, c] = planeFit(positions_);
+				const [a, b, c, d] = planeFit(positions_);
+				positions_.forEach((point) => {
+					console.log(
+						a * point[0] + b * point[1] + c * point[2] + d,
+						"打印误差"
+					);
+				});
+				debugger;
 				// 计算点在面上的投影点的坐标
 				const pointProjectToPlane = (x, y, z, a, b, c, d) => {
 					const dist =
@@ -300,8 +332,9 @@ class Map3D {
 					a,
 					b,
 					c,
-					1
+					d
 				);
+				debugger;
 				const v1 = Cesium.Cartesian3.normalize(
 					Cesium.Cartesian3.subtract(
 						point1_,
@@ -317,7 +350,7 @@ class Map3D {
 				const dist = Math.abs(dist1 / Cesium.Cartesian3.dot(v1, v2));
 				const point1__ = Cesium.Cartesian3.subtract(
 					point1_,
-					dist * v2,
+					Cesium.Cartesian3.multiplyByScalar(v2,dist,new Cesium.Cartesian3()),
 					new Cesium.Cartesian3()
 				);
 				const vx = Cesium.Cartesian3.normalize(
@@ -336,8 +369,24 @@ class Map3D {
 					Cesium.Cartesian3.cross(vz, vx, new Cesium.Cartesian3()),
 					new Cesium.Cartesian3()
 				);
+				const rotationMatrixValues = getRotation(
+					[vx.x, vx.y, vx.z],
+					[vy.x, vy.y, vy.z],
+					[vz.x, vz.y, vz.z],
+					[1, 0, 0],
+					[0, 1, 0],
+					[0, 0, 1]
+				);
+				const rotationMatrix =
+					Cesium.Matrix3.fromArray(rotationMatrixValues);
+				return Cesium.Quaternion.fromRotationMatrix(
+					rotationMatrix,
+					new Cesium.Quaternion()
+				);
 			})
-			.catch(() => {
+			.catch((err) => {
+				console.log(err);
+				console.log("这里执行了");
 				return undefined;
 			});
 		return resHPR;

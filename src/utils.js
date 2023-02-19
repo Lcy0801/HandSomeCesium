@@ -34,7 +34,7 @@ export const planeFit = (points) => {
 		math.norm(math.matrix([a, b, c]))
 	);
 	const flag = math.dot(v1, v2);
-	return flag >= 0 ? [a, b, c] : [-a, -b, -c];
+	return flag >= 0 ? [a, b, c, 1] : [-a, -b, -c, -1];
 };
 
 /**
