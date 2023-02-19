@@ -20,11 +20,9 @@ class TraceInterpolation {
 	public end: TracePoint;
 	public lonFunc: (t: number) => number;
 	public latFunc: (t: number) => number;
-	public t0: number;
-	constructor(start: TracePoint, end: TracePoint, t0: number) {
+	constructor(start: TracePoint, end: TracePoint) {
 		this.start = { ...start };
 		this.end = { ...end };
-		this.t0 = t0;
 		this.solveInterpolationFunction();
 	}
 	/**
@@ -58,8 +56,8 @@ class TraceInterpolation {
 	private solveInterpolationFunction(): void {
 		const startDeltaLonLat = this.preProcess(this.start);
 		const endDeltaLonLat = this.preProcess(this.end);
-		const startT = this.start.t - this.t0;
-		const endT = this.end.t - this.t0;
+		const startT = 0;
+		const endT = this.end.t-this.start.t;
 		// 经度函数
 		const A = mathjs.matrix([
 			[startT * startT * startT, startT * startT, startT, 1],
@@ -81,7 +79,7 @@ class TraceInterpolation {
 			d: lonFunc.subset(mathjs.index(3)) as unknown as number,
 		};
 		this.lonFunc = (t: number): number => { 
-			const dt = t - this.t0;
+			const dt = t - this.start.t;
 			return lonFunc_.a * dt * dt * dt + lonFunc_.b * dt * dt + lonFunc_.c * dt + lonFunc_.d;
 		}
 		// 纬度函数
@@ -99,7 +97,7 @@ class TraceInterpolation {
 			d:latFunc.subset(mathjs.index(3)) as unknown as number,
 		};
 		this.latFunc = (t: number):number => { 
-			const dt = t - this.t0;
+			const dt = t - this.start.t;
 			return (
 				latFunc_.a * dt * dt * dt +
 				latFunc_.b * dt * dt +
