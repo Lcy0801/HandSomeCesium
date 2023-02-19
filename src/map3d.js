@@ -3,6 +3,7 @@ import { CesiumToken } from "./mapconfig";
 import traceData from "./data/Trace_.json";
 import * as turf from "@turf/turf";
 import TraceInterpolation from "./interpolation";
+import { planeFit, getRotation } from "./utils";
 
 class Map3D {
 	initMap(container) {
@@ -24,13 +25,24 @@ class Map3D {
 			orientation: Cesium.HeadingPitchRoll.fromDegrees(0, -45, 0),
 		});
 		window.viewer = this.viewer;
+		window.Cesium = Cesium;
+		//等待10s后开始绘制轨迹，确保轨迹区域的地形瓦片已经加载完成能够准确的采集地形高度
 		setTimeout(() => {
 			this.carMove();
 		}, 10000);
 	}
 	carMove() {
+		//准备车辆模型
+		this.carEntity = this.viewer.entities.add({
+			position: new Cesium.Cartesian3(0, 0, 0),
+			orientation: new Cesium.Quaternion(0, 0, 0, 1),
+			model: {
+				uri: "car3.gltf",
+			},
+		});
 		const points = traceData.features;
 		const tracePointDataSource = new Cesium.CustomDataSource("tracePoint");
+		this.tracePointDataSource = tracePointDataSource;
 		this.viewer.dataSources.add(tracePointDataSource);
 		//绘制轨迹点
 		points.forEach((point) => {
@@ -67,6 +79,7 @@ class Map3D {
 				width: 2,
 			},
 		});
+		this.traceLine = traceLine;
 		// 计算轨迹点的速度和方向
 		const num = points.length;
 		const points_ = [];
@@ -114,6 +127,7 @@ class Map3D {
 		const interTracePointSource = new Cesium.CustomDataSource(
 			"interTracePoint"
 		);
+		this.interTracePointSource = interTracePointSource;
 		this.viewer.dataSources.add(interTracePointSource);
 		this.viewer.clock.onTick.addEventListener((tick) => {
 			const t = Cesium.JulianDate.toDate(tick.currentTime).getTime();
@@ -146,6 +160,7 @@ class Map3D {
 						traceLine,
 						...tracePointDataSource.entities.values,
 						...interTracePointSource.entities.values,
+						this.carEntity
 					]
 				)
 				.then((value) => {
@@ -159,6 +174,8 @@ class Map3D {
 							"west"
 						)
 					);
+					this.carEntity.position = position_;
+					this.carEntity.orientation = qua;
 					const entity = interTracePointSource.entities.add({
 						position: position_,
 						point: {
@@ -173,6 +190,106 @@ class Map3D {
 		this.viewer.clock.currentTime = Cesium.JulianDate.fromDate(
 			new Date(t0)
 		);
+	}
+	clampToTerrain(position, heading) {
+		const headingToBearing = (heading) => {
+			return heading <= 180 ? heading : heading - 360;
+		};
+		const position_ = Cesium.Cartographic.fromCartesian(position);
+		const longitude = Cesium.Math.toDegrees(position_.longitude);
+		const latitude = Cesium.Math.toDegrees(position_.latitude);
+		const point0 = turf.point([longitude, latitude]);
+		const bearing1 = headingToBearing(heading);
+		const point1 = turf.destination(point0, 1, bearing1, {
+			units: "meters",
+		});
+		const poiPromise1 = this.viewer.scene.sampleHeightMostDetailed(
+			[
+				Cesium.Cartographic.fromDegrees(
+					point1.geometry.coordinates[0],
+					point1.geometry.coordinates[1]
+				),
+			],
+			[
+				traceLine,
+				...this.tracePointDataSource.entities.values,
+				...this.interTracePointSource.entities.values,
+			]
+		);
+		const bearing2 = headingToBearing((heading + 90) % 360);
+		const point2 = turf.destination(point0, 1, bearing2, {
+			units: "meters",
+		});
+		const poiPromise2 = this.viewer.scene.sampleHeightMostDetailed(
+			[
+				Cesium.Cartographic.fromDegrees(
+					point2.geometry.coordinates[0],
+					point2.geometry.coordinates[1]
+				),
+			],
+			[
+				traceLine,
+				...this.tracePointDataSource.entities.values,
+				...this.interTracePointSource.entities.values,
+			]
+		);
+		const bearing3 = headingToBearing((heading + 180) % 360);
+		const point3 = turf.destination(point0, 1, bearing3, {
+			units: "meters",
+		});
+		const poiPromise3 = this.viewer.scene.sampleHeightMostDetailed(
+			[
+				Cesium.Cartographic.fromDegrees(
+					point3.geometry.coordinates[0],
+					point3.geometry.coordinates[1]
+				),
+			],
+			[
+				traceLine,
+				...this.tracePointDataSource.entities.values,
+				...this.interTracePointSource.entities.values,
+			]
+		);
+		const bearing4 = headingToBearing((heading + 270) % 360);
+		const point4 = turf.destination(point0, 1, bearing4, {
+			units: "meters",
+		});
+		const poiPromise4 = this.viewer.scene.sampleHeightMostDetailed(
+			[
+				Cesium.Cartographic.fromDegrees(
+					point4.geometry.coordinates[0],
+					point4.geometry.coordinates[1]
+				),
+			],
+			[
+				traceLine,
+				...this.tracePointDataSource.entities.values,
+				...this.interTracePointSource.entities.values,
+			]
+		);
+		Promise.all([poiPromise1, poiPromise2, poiPromise3, poiPromise4])
+			.then((values) => {
+				const positions = values.map((value) => {
+					const poiOnTerrain = value[0];
+					const poiOnTerrain_ =
+						Cesium.Cartographic.toCartesian(poiOnTerrain);
+					return poiOnTerrain_;
+				});
+				positions.push(position);
+				const positions_ = positions.map((position) => {
+					return [position.x, position.y, position.z];
+				});
+				const [a, b, c] = planeFit(positions_);
+				// 计算点在面上的投影点的坐标
+				const pointProjectToPlane = (x, y, z, a, b, c, d) => {
+					const dist =
+						(a * x + b * y + c * z + d) / (a * a + b * b + c * c);
+					return [x - dist * a, y - dist * b, z - dist * c];
+				};
+			})
+			.catch(() => {
+				return undefined;
+			});
 	}
 }
 export default new Map3D();

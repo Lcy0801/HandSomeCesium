@@ -13,7 +13,28 @@ export const planeFit = (points) => {
 	const a = res.subset(math.index(0));
 	const b = res.subset(math.index(1));
 	const c = res.subset(math.index(2));
-	return [a, b, c];
+	// 求解重心坐标
+	let [xSum, ySum, zSum] = [0, 0, 0];
+	points.forEach((point) => {
+		xSum += point[0];
+		ySum += point[1];
+		zSum += point[2];
+	});
+	const [xAvg, yAvg, zAvg] = [
+		xSum / points.length,
+		ySum / points.length,
+		zSum / points.length,
+	];
+	const v1 = math.divide(
+		math.matrix([xAvg, yAvg, zAvg]),
+		math.norm(math.matrix([xAvg, yAvg, zAvg]))
+	);
+	const v2 = math.divide(
+		math.matrix([a, b, c]),
+		math.norm(math.matrix([a, b, c]))
+	);
+	const flag = math.dot(v1, v2);
+	return flag >= 0 ? [a, b, c] : [-a, -b, -c];
 };
 
 /**
