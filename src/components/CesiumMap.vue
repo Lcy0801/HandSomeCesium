@@ -1,12 +1,17 @@
 <template lang="">
-  <div id="container"></div>
+  <div id="container" @click="mapClick"></div>
 </template>
-<script setup>
-import { onMounted } from "vue";
+<script setup lang="ts">
+import { onMounted ,inject,Ref} from "vue";
 import map3d from "../map3d";
 onMounted(() => {
   map3d.initMap("container");
 });
+const num = inject("num") as Ref<number>;
+const mapClick = () => { 
+  num.value++;
+}
+
 </script>
 <style lang="css" scoped>
 #container {
