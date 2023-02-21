@@ -25,8 +25,12 @@ class Map3D {
 			),
 			orientation: Cesium.HeadingPitchRoll.fromDegrees(0, -45, 0),
 		});
+		this.zDataSource = new Cesium.CustomDataSource("zAxis");
+		this.xDataSource = new Cesium.CustomDataSource("xAxis");
+		// this.viewer.dataSources.add(this.zDataSource);
 		window.viewer = this.viewer;
 		window.Cesium = Cesium;
+		window.map3d = this;
 		//等待10s后开始绘制轨迹，确保轨迹区域的地形瓦片已经加载完成能够准确的采集地形高度
 		this.otherSource = new Cesium.CustomDataSource("otherSource");
 		this.viewer.dataSources.add(this.otherSource);
@@ -44,6 +48,7 @@ class Map3D {
 			},
 		});
 		this.viewer.trackedEntity = this.carEntity;
+		// traceData.features = traceData.features.slice(0, 30);
 		const points = traceData.features;
 		const tracePointDataSource = new Cesium.CustomDataSource("tracePoint");
 		this.tracePointDataSource = tracePointDataSource;
@@ -166,6 +171,8 @@ class Map3D {
 						...interTracePointSource.entities.values,
 						this.carEntity,
 						...this.otherSource.entities.values,
+						...this.zDataSource.entities.values,
+						...this.xDataSource.entities.values,
 					]
 				)
 				.then(async (value) => {
@@ -223,6 +230,8 @@ class Map3D {
 				...this.interTracePointSource.entities.values,
 				...this.otherSource.entities.values,
 				this.carEntity,
+				...this.zDataSource.entities.values,
+				...this.xDataSource.entities.values,
 			]
 		);
 		const bearing2 = headingToBearing((heading + 90) % 360);
@@ -242,6 +251,8 @@ class Map3D {
 				...this.interTracePointSource.entities.values,
 				...this.otherSource.entities.values,
 				this.carEntity,
+				...this.zDataSource.entities.values,
+				...this.xDataSource.entities.values,
 			]
 		);
 		const bearing3 = headingToBearing((heading + 180) % 360);
@@ -261,6 +272,8 @@ class Map3D {
 				...this.interTracePointSource.entities.values,
 				...this.otherSource.entities.values,
 				this.carEntity,
+				...this.zDataSource.entities.values,
+				...this.xDataSource.entities.values,
 			]
 		);
 		const bearing4 = headingToBearing((heading + 270) % 360);
@@ -280,6 +293,8 @@ class Map3D {
 				...this.interTracePointSource.entities.values,
 				...this.otherSource.entities.values,
 				this.carEntity,
+				...this.zDataSource.entities.values,
+				...this.xDataSource.entities.values,
 			]
 		);
 		const resHPR = await Promise.all([
@@ -305,7 +320,6 @@ class Map3D {
 						},
 					});
 				});
-				debugger;
 				const positions_ = positions.map((position) => {
 					return [position.x, position.y, position.z];
 				});
@@ -316,48 +330,52 @@ class Map3D {
 						"打印误差"
 					);
 				});
-				debugger;
-				// 计算点在面上的投影点的坐标
-				const pointProjectToPlane = (x, y, z, a, b, c, d) => {
-					const dist =
-						(a * x + b * y + c * z + d) / (a * a + b * b + c * c);
-					return [x - dist * a, y - dist * b, z - dist * c, dist];
+				//点沿椭球面法线方向投影至平面
+				const pointProjectToPlane = (lon, lat, a, b, c, d) => {
+					const pointS = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+					const pointE = Cesium.Cartesian3.fromDegrees(lon, lat, 10);
+					const norm = Cesium.Cartesian3.normalize(
+						Cesium.Cartesian3.subtract(
+							pointE,
+							pointS,
+							new Cesium.Cartesian3()
+						),
+						new Cesium.Cartesian3()
+					);
+					return this.linepPlaneIntersection(
+						pointS.x,
+						pointS.y,
+						pointS.z,
+						norm.x,
+						norm.y,
+						norm.z,
+						a,
+						b,
+						c,
+						d
+					);
 				};
-				// 将heading方位的点投影至平面
-				const point1_ = Cesium.Cartographic.toCartesian(values[0][0]);
-				const [x1, y1, z1, dist1] = pointProjectToPlane(
-					point1_.x,
-					point1_.y,
-					point1_.z,
+				const point1_ = pointProjectToPlane(
+					point1.geometry.coordinates[0],
+					point1.geometry.coordinates[1],
 					a,
 					b,
 					c,
 					d
 				);
-				debugger;
-				const v1 = Cesium.Cartesian3.normalize(
-					Cesium.Cartesian3.subtract(
-						point1_,
-						new Cesium.Cartesian3(x1, y1, z1),
-						new Cesium.Cartesian3()
-					),
-					new Cesium.Cartesian3()
-				);
-				const v2 = Cesium.Cartesian3.normalize(
-					point1_,
-					new Cesium.Cartesian3()
-				);
-				const dist = Math.abs(dist1 / Cesium.Cartesian3.dot(v1, v2));
-				const point1__ = Cesium.Cartesian3.subtract(
-					point1_,
-					Cesium.Cartesian3.multiplyByScalar(v2,dist,new Cesium.Cartesian3()),
-					new Cesium.Cartesian3()
+				const position_ = pointProjectToPlane(
+					longitude,
+					latitude,
+					a,
+					b,
+					c,
+					d
 				);
 				const vx = Cesium.Cartesian3.normalize(
-					Cesium.Cartesian3.subtract(
-						point1__,
-						position,
-						new Cesium.Cartesian3()
+					new Cesium.Cartesian3(
+						point1_[0] - position_[0],
+						point1_[1] - position_[1],
+						point1_[2] - position_[2]
 					),
 					new Cesium.Cartesian3()
 				);
@@ -369,6 +387,53 @@ class Map3D {
 					Cesium.Cartesian3.cross(vz, vx, new Cesium.Cartesian3()),
 					new Cesium.Cartesian3()
 				);
+				//绘制z轴:经检核z轴计算正确
+				const zPoint = Cesium.Cartesian3.add(
+					position,
+					Cesium.Cartesian3.multiplyByScalar(
+						vz,
+						30,
+						new Cesium.Cartesian3()
+					),
+					new Cesium.Cartesian3()
+				);
+				this.zDataSource.entities.add({
+					polyline: {
+						positions: [position, zPoint],
+						material: new Cesium.PolylineArrowMaterialProperty(
+							Cesium.Color.RED
+						),
+						width: 5,
+					},
+				});
+				//绘制x轴
+				const positionX = Cesium.Cartesian3.add(
+					position,
+					Cesium.Cartesian3.multiplyByScalar(
+						vz,
+						1,
+						new Cesium.Cartesian3()
+					),
+					new Cesium.Cartesian3()
+				);
+				const xPoint = Cesium.Cartesian3.add(
+					positionX,
+					Cesium.Cartesian3.multiplyByScalar(
+						vx,
+						30,
+						new Cesium.Cartesian3()
+					),
+					new Cesium.Cartesian3()
+				);
+				this.xDataSource.entities.add({
+					polyline: {
+						positions: [positionX, xPoint],
+						material: new Cesium.PolylineArrowMaterialProperty(
+							Cesium.Color.GREEN
+						),
+						width: 5,
+					},
+				});
 				const rotationMatrixValues = getRotation(
 					[vx.x, vx.y, vx.z],
 					[vy.x, vy.y, vy.z],
@@ -386,10 +451,17 @@ class Map3D {
 			})
 			.catch((err) => {
 				console.log(err);
-				console.log("这里执行了");
 				return undefined;
 			});
 		return resHPR;
+	}
+	//直线与平面的交点
+	linepPlaneIntersection(x, y, z, n1, n2, n3, a, b, c, d) {
+		const lamda = (a * x + b * y + c * z + d) / (n1 * a + n2 * b + n3 * c);
+		const x_ = x - lamda * n1;
+		const y_ = y - lamda * n2;
+		const z_ = z - lamda * n3;
+		return [x_, y_, z_];
 	}
 }
 export default new Map3D();
