@@ -51,7 +51,6 @@ export const getRotation = (
 	yNormal2,
 	zNormal2
 ) => {
-	debugger;
 	// 计算x1_o_y1与x2_o_y2平面的交线
 	//改交线即垂直于z1轴也垂直于z2轴
 	xNormal1 = math.matrix(xNormal1);
