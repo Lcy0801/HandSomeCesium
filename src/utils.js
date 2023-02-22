@@ -1,5 +1,21 @@
 import * as math from "mathjs";
 window.math = math;
+
+/**
+ * @description 计算三维空间中直线和平面的交点
+ * @param {*} [x,y,z]:直线所在的点
+ * @param {*} [n1, n2, n3]:直线的方向向量
+ * @param {*} [a, b, c, d]:平面方程 ax+by+cz+d=0
+ * @returns
+ */
+export const linepPlaneIntersection = (x, y, z, n1, n2, n3, a, b, c, d) => {
+	const lamda = (a * x + b * y + c * z + d) / (n1 * a + n2 * b + n3 * c);
+	const x_ = x - lamda * n1;
+	const y_ = y - lamda * n2;
+	const z_ = z - lamda * n3;
+	return [x_, y_, z_];
+};
+
 /**
  * 平面方程拟合
  * @param {*} points
