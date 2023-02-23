@@ -2,12 +2,18 @@ import * as Cesium from "cesium";
 import * as turf from "@turf/turf";
 import { linepPlaneIntersection, planeFit, getRotation } from "./utils";
 
+interface OrientationAndPoisition {
+	position: Cesium.Cartesian3;
+	orientation: Cesium.Quaternion;
+	modelMatrix?: Cesium.Matrix4 | undefined;
+}
+
 class MoveOnTerrain {
 	public terrainType: 0 | 1 = 0;
 	public viewer: Cesium.Viewer;
-	public moveingObj: Cesium.Entity | Cesium.Primitive;
 	public excludeObjects: any[];
 	public isAsync: boolean;
+	public cesiumObj:any;
 
 	/**
 	 * @param terrainType 地形数据来源:terrainType=0,地形数据来自于倾斜模型走贴地;terrainType=1,地形数据来自于地形瓦片走地形采样逻辑
@@ -19,15 +25,15 @@ class MoveOnTerrain {
 	constructor(
 		terrainType: 0 | 1,
 		viewer: Cesium.Viewer,
-		moveingObj: Cesium.Entity | Cesium.Primitive,
+		cesiumObj: Cesium.Entity | Cesium.Primitive,
 		excludeObjects: any[],
-		isAsync: false
+		isAsync: boolean=false
 	) {
 		this.terrainType = terrainType;
 		this.viewer = viewer;
-		this.moveingObj = moveingObj;
 		this.excludeObjects = excludeObjects;
 		this.isAsync = isAsync;
+		this.cesiumObj = cesiumObj;
 	}
 
 	/**
@@ -76,9 +82,27 @@ class MoveOnTerrain {
 	protected async sampleToTerrain(
 		position: Cesium.Cartesian3,
 		heading: number
-	): Promise<Cesium.Quaternion> {
+	): Promise<OrientationAndPoisition> {
+		let positionOnTerrain: Cesium.Cartesian3;
 		if (!this.viewer.scene.sampleHeightSupported) {
-			return new Cesium.Quaternion(0, 0, 0, 1);
+			const qua = new Cesium.Quaternion(0, 0, 0, 1);
+			let modelMatrix: Cesium.Matrix4 | undefined;
+			if (this.cesiumObj instanceof Cesium.Primitive) {
+				const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+					qua,
+					new Cesium.Matrix3()
+				);
+				modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+					rotationMatrix,
+					position,
+					new Cesium.Matrix4()
+				);
+			}
+			return {
+				position: position,
+				orientation: qua,
+				modelMatrix: modelMatrix,
+			};
 		}
 		const position_ = Cesium.Cartographic.fromCartesian(position);
 		const longitude = Cesium.Math.toDegrees(position_.longitude);
@@ -126,6 +150,7 @@ class MoveOnTerrain {
 				],
 				[...this.excludeObjects]
 			);
+			positionOnTerrain = Cesium.Cartographic.toCartesian((await poiPromise0)[0]);
 			const poiPromise2 = this.viewer.scene.sampleHeightMostDetailed(
 				[
 					Cesium.Cartographic.fromDegrees(
@@ -187,6 +212,7 @@ class MoveOnTerrain {
 				point0__.geometry.coordinates[1],
 				height0
 			);
+			positionOnTerrain = point0;
 			const height1 = this.viewer.scene.sampleHeight(
 				Cesium.Cartographic.fromDegrees(
 					point1__.geometry.coordinates[0],
@@ -238,7 +264,24 @@ class MoveOnTerrain {
 			positions = [point0, point1, point2, point3, point4];
 		}
 		if (positions === undefined) {
-			return new Cesium.Quaternion(0, 0, 0, 1);
+			const qua = new Cesium.Quaternion(0, 0, 0, 1);
+			let modelMatrix: Cesium.Matrix4 | undefined;
+			if (this.cesiumObj instanceof Cesium.Primitive) {
+				const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+					qua,
+					new Cesium.Matrix3()
+				);
+				modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+					rotationMatrix,
+					position,
+					new Cesium.Matrix4()
+				);
+			}
+			return {
+				position: position,
+				orientation: qua,
+				modelMatrix: modelMatrix,
+			};
 		}
 		const positionsXYZ = positions.map((position) => {
 			return [position.x, position.y, position.z];
@@ -286,10 +329,27 @@ class MoveOnTerrain {
 			[0, 0, 1]
 		);
 		const rotationMatrix = Cesium.Matrix3.fromArray(rotationMatrixValues);
-		return Cesium.Quaternion.fromRotationMatrix(
+		const qua= Cesium.Quaternion.fromRotationMatrix(
 			rotationMatrix,
 			new Cesium.Quaternion()
 		);
+		let modelMatrix: Cesium.Matrix4 | undefined;
+		if (this.cesiumObj instanceof Cesium.Primitive) {
+			const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+				qua,
+				new Cesium.Matrix3()
+			);
+			modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+				rotationMatrix,
+				positionOnTerrain,
+				new Cesium.Matrix4()
+			);
+		}
+		return {
+			position: positionOnTerrain,
+			orientation: qua,
+			modelMatrix: modelMatrix,
+		};
 	}
 
 	/**
@@ -301,9 +361,27 @@ class MoveOnTerrain {
 	protected async clampToTerrain(
 		position: Cesium.Cartesian3,
 		heading: number
-	): Promise<Cesium.Quaternion> {
+	): Promise<OrientationAndPoisition> {
+		let positionOnTerrain: Cesium.Cartesian3;
 		if (!this.viewer.scene.clampToHeightSupported) {
-			return new Cesium.Quaternion(0, 0, 0, 1);
+			const qua = new Cesium.Quaternion(0, 0, 0, 1);
+			let modelMatrix: Cesium.Matrix4 | undefined;
+			if (this.cesiumObj instanceof Cesium.Primitive) {
+				const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+					qua,
+					new Cesium.Matrix3()
+				);
+				modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+					rotationMatrix,
+					position,
+					new Cesium.Matrix4()
+				);
+			}
+			return {
+				position: position,
+				orientation: qua,
+				modelMatrix: modelMatrix,
+			};
 		}
 		const position_ = Cesium.Cartographic.fromCartesian(position);
 		const longitude = Cesium.Math.toDegrees(position_.longitude);
@@ -351,6 +429,7 @@ class MoveOnTerrain {
 				],
 				[...this.excludeObjects]
 			);
+			positionOnTerrain = (await poiPromise0)[0];
 			const poiPromise2 = this.viewer.scene.clampToHeightMostDetailed(
 				[
 					Cesium.Cartesian3.fromDegrees(
@@ -405,6 +484,7 @@ class MoveOnTerrain {
 				),
 				[...this.excludeObjects]
 			);
+			positionOnTerrain = point0;
 			const point1 = this.viewer.scene.clampToHeight(
 				Cesium.Cartesian3.fromDegrees(
 					point1__.geometry.coordinates[0],
@@ -436,7 +516,24 @@ class MoveOnTerrain {
 			positions = [point0, point1, point2, point3, point4];
 		}
 		if (positions === undefined) {
-			return new Cesium.Quaternion(0, 0, 0, 1);
+			const qua = new Cesium.Quaternion(0, 0, 0, 1);
+			let modelMatrix: Cesium.Matrix4 | undefined;
+			if (this.cesiumObj instanceof Cesium.Primitive) {
+				const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+					qua,
+					new Cesium.Matrix3()
+				);
+				modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+					rotationMatrix,
+					position,
+					new Cesium.Matrix4()
+				);
+			}
+			return {
+				position: position,
+				orientation: qua,
+				modelMatrix: modelMatrix,
+			};
 		}
 		const positionsXYZ = positions.map((position) => {
 			return [position.x, position.y, position.z];
@@ -484,10 +581,27 @@ class MoveOnTerrain {
 			[0, 0, 1]
 		);
 		const rotationMatrix = Cesium.Matrix3.fromArray(rotationMatrixValues);
-		return Cesium.Quaternion.fromRotationMatrix(
+		const qua = Cesium.Quaternion.fromRotationMatrix(
 			rotationMatrix,
 			new Cesium.Quaternion()
 		);
+		let modelMatrix: Cesium.Matrix4 | undefined;
+		if (this.cesiumObj instanceof Cesium.Primitive) {
+			const rotationMatrix = Cesium.Matrix3.fromQuaternion(
+				qua,
+				new Cesium.Matrix3()
+			);
+			modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+				rotationMatrix,
+				positionOnTerrain,
+				new Cesium.Matrix4()
+			);
+		}
+		return {
+			position: positionOnTerrain,
+			orientation: qua,
+			modelMatrix: modelMatrix,
+		};
 	}
 
 	/**
@@ -496,8 +610,18 @@ class MoveOnTerrain {
 	 * @param heading 行驶方向
 	 * @returns 姿态四元数
 	 */
-	public async getQuaternionByTerrain(position, heading) {
-		const qua:Cesium.Quaternion =  this.terrainType === 0 ? await this.clampToTerrain(position, heading) : await this.sampleToTerrain(position, heading);
-		return qua;
+	public async setOrientationAndPostion(longitude, latitude, heading) {
+		const position = Cesium.Cartesian3.fromDegrees(longitude, latitude);
+		const op: OrientationAndPoisition =
+			this.terrainType === 0
+				? await this.clampToTerrain(position, heading)
+				: await this.sampleToTerrain(position, heading);
+		if (this.cesiumObj instanceof Cesium.Primitive) {
+			this.cesiumObj.modelMatrix = op.modelMatrix as Cesium.Matrix4;
+		} else { 
+			this.cesiumObj.position = op.position;
+			this.cesiumObj.orientation = op.orientation;
+		}
 	}
 }
+export default MoveOnTerrain;
