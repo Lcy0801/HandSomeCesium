@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
+import lineData from "./polyline.json";
 
 class Map3D {
 	initMap(container) {
@@ -9,10 +10,14 @@ class Map3D {
 			animation: false,
 			shouldAnimate: true,
 		});
+		window.viewer = this.viewer;
+		window.Cesium = Cesium;
 		// this.drawRadarEntity();
 		// this.drawRadarPrimitive();
 		// this.drawScanRadarPrimitive();
-		this.drawFencePrimitive();
+		// this.drawFencePrimitive();
+		// this.drawFlowLine();
+        this.drawFlowFencePrimitive();
 	}
 	//通过纹理贴图
 	drawRadarEntity() {
@@ -212,14 +217,14 @@ class Map3D {
                 return m;
             }
 		`;
-		
+
 		this.viewer.scene.primitives.add(
 			new Cesium.Primitive({
 				geometryInstances: {
 					geometry: new Cesium.WallGeometry({
 						positions: positions,
 						maximumHeights: maxHeights,
-						minimumHeights:minHeights
+						minimumHeights: minHeights,
 					}),
 					modelMatrix: Cesium.Matrix4.IDENTITY,
 				},
@@ -229,11 +234,105 @@ class Map3D {
 							type: "electronicFence",
 							uniforms: {
 								maxHeight: maxHeight,
-								minHeight:minHeight,
+								minHeight: minHeight,
 								scanHeight: 20000.0,
-								scanSpeed: 500.0
+								scanSpeed: 500.0,
 							},
 							source: shaderSource,
+						},
+					}),
+				}),
+			})
+		);
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
+			new Cesium.HeadingPitchRange(0, -15, 100000)
+		);
+	}
+	drawFlowFencePrimitive() {
+		const positions = [
+			Cesium.Cartesian3.fromDegrees(120, 30),
+			Cesium.Cartesian3.fromDegrees(121, 30),
+			Cesium.Cartesian3.fromDegrees(121, 31),
+			Cesium.Cartesian3.fromDegrees(120, 31),
+			Cesium.Cartesian3.fromDegrees(120, 30),
+		];
+		const maxHeight = 50000;
+		const minHeight = 0;
+		const maxHeights = new Array(positions.length).fill(maxHeight);
+		const minHeights = new Array(positions.length).fill(minHeight);
+		const shaderSource = `
+			czm_material czm_getMaterial(czm_materialInput materialInput)
+            {
+                czm_material m = czm_getDefaultMaterial(materialInput);
+				if (m.alpha==0.0)
+				{
+					m.alpha = 1.0;
+				}
+                return m;
+            }
+		`;
+
+		this.viewer.scene.primitives.add(
+			new Cesium.Primitive({
+				geometryInstances: {
+					geometry: new Cesium.WallGeometry({
+						positions: positions,
+						maximumHeights: maxHeights,
+						minimumHeights: minHeights,
+					}),
+					modelMatrix: Cesium.Matrix4.IDENTITY,
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							type: "Image",
+							uniforms: {
+								image: "arrow.png",
+								repeat: new Cesium.Cartesian2(4, 2),
+							},
+							source: shaderSource,
+						},
+					}),
+				}),
+			})
+		);
+		this.viewer.camera.lookAt(
+			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
+			new Cesium.HeadingPitchRange(0, -15, 100000)
+		);
+	}
+	//自定义着色器实现流动线
+	drawFlowLine() {
+		const positions = [
+			Cesium.Cartesian3.fromDegrees(120, 30, 100),
+			Cesium.Cartesian3.fromDegrees(121, 30, 100),
+			Cesium.Cartesian3.fromDegrees(121, 31, 100),
+			Cesium.Cartesian3.fromDegrees(120, 31, 100),
+			Cesium.Cartesian3.fromDegrees(120, 30, 100),
+		];
+		const polylinePrimitive = this.viewer.scene.primitives.add(
+			new Cesium.Primitive({
+				geometryInstances: {
+					geometry: new Cesium.PolylineGeometry({
+						positions: positions,
+						width: 3,
+					}),
+					modelMatrix: Cesium.Matrix4.IDENTITY,
+					attributes: {
+						color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+							new Cesium.Color(1.0, 0.0, 0.0, 1.0)
+						),
+					},
+				},
+				appearance: new Cesium.MaterialAppearance({
+					material: new Cesium.Material({
+						fabric: {
+							type: "Image",
+							uniforms: {
+								image: "../images/Cesium_Logo_Color.jpg",
+								repeat: new Cesium.Cartesian2(1, 1),
+							},
 						},
 					}),
 				}),
