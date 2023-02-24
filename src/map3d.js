@@ -111,8 +111,6 @@ class Map3D {
 				direction: direction,
 			});
 		}
-		//轨迹的开始时间
-		const t0 = points_[0].t;
 		const traces = [];
 		for (let index = 1; index < num; index++) {
 			const startPoint = points_[index - 1];
@@ -120,31 +118,24 @@ class Map3D {
 			const trace = new TraceInterpolation(startPoint, endPoint);
 			traces.push(trace);
 		}
-		//根据插值时间计算对应插值轨迹段
-		const getTraceByTime = (t) => {
-			const index = points_.findIndex((point_) => {
-				return point_.t > t;
-			});
-			return index === -1 ? undefined : traces[index - 1];
-		};
-		const interTracePointSource = new Cesium.CustomDataSource(
-			"interTracePoint"
-		);
-		this.interTracePointSource = interTracePointSource;
-		this.viewer.dataSources.add(interTracePointSource);
 		const carMoveOnTerrain = new MoveOnTerrain(
-			1,
+            1,
 			this.viewer,
 			this.carEntity,
 			[
-				this.carEntity,
+                this.carEntity,
 				this.traceLine,
-				...this.tracePointDataSource.entities.values,
-				this.interTracePointSource.entities.values,
-            ],
-            true
-		);
-		this.viewer.clock.onTick.addEventListener(async (tick) => {
+				...this.tracePointDataSource.entities.values,			],
+			true
+            );
+            //根据插值时间计算对应插值轨迹段
+            const getTraceByTime = (t) => {
+                const index = points_.findIndex((point_) => {
+                    return point_.t > t;
+                });
+                return index === -1 ? undefined : traces[index - 1];
+            };
+            this.viewer.clock.onTick.addEventListener(async (tick) => {
 			const t = Cesium.JulianDate.toDate(tick.currentTime).getTime();
 			const trace = getTraceByTime(t);
 			if (!trace) {
@@ -165,6 +156,8 @@ class Map3D {
 				heading
 			);
 		});
+		//轨迹的开始时间
+		const t0 = points_[0].t;
 		//更改cesium系统时间为轨迹开始时间
 		this.viewer.clock.shouldAnimate = true;
 		//在开始cesium的动画后，cesium的当前时间会自动设置为当前系统时间，因此此时需要重新设置cesium的当前时间
