@@ -288,10 +288,9 @@ class Map3D {
 						fabric: {
 							type: "Image",
 							uniforms: {
-								image: "arrow.png",
-								repeat: new Cesium.Cartesian2(4, 2),
+								image: "lineArrow2.png",
+								repeat: new Cesium.Cartesian2(1,1),
 							},
-							source: shaderSource,
 						},
 					}),
 				}),
