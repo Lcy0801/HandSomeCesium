@@ -61,7 +61,7 @@ FlowImageProperty.prototype.getValue = function (time, result) {
 	if (!defined(result)) {
 		result = {};
 	}
-	result.image = "https://c-ssl.dtstatic.com/uploads/item/201410/08/20141008205803_ua2md.thumb.1000_0.jpeg",
+	result.image = "./lineArrow.png";
 	result.repeat = Property.getValueOrClonedDefault(
 		this._repeat,
 		time,
@@ -100,9 +100,9 @@ const shaderSource = `
             czm_material czm_getMaterial(czm_materialInput materialInput)
             {
                 czm_material m = czm_getDefaultMaterial(materialInput);
-                float x = texture2D(image, vec2(0.5,0.5));
-				m.diffuse = 
-				m.alpha = dt / duration;
+				vec2 st = materialInput.st;
+				vec2 newSt = fract(vec2(st.x * repeat.x , st.y * repeat.y));
+                m.diffuse  = texture(image , newSt).rgb;
                 return m;
             }
         `;
@@ -113,9 +113,9 @@ Cesium.Material._materialCache.addMaterial(
 		fabric: {
 			type: Cesium.Material.FlowImageMaterialType,
 			uniforms: {
-				image: Cesium.Material.DefaultImageId,
+				image: "./lineArrow.png",
 				repeat: new Cesium.Cartesian2(1, 1),
-				flowAxis: "x",
+				flowAxis: true,
 				duration: 10,
 				dt: 0,
 				color: Cesium.Color.WHITE,

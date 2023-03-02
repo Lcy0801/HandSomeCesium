@@ -120,7 +120,7 @@ Object.defineProperties(PolylineFlowImgMaterialProperty.prototype, {
 				this._scene.pixelRatio,
 				i
 			).x;
-		}),
+		})	,
 	(PolylineFlowImgMaterialProperty.prototype.equals = function (e) {
 		return (
 			this === e ||

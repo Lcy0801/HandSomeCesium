@@ -258,23 +258,23 @@ class Map3D {
 			Cesium.Cartesian3.fromDegrees(120, 31),
 			Cesium.Cartesian3.fromDegrees(120, 30),
 		];
-		const maxHeight = 10000;
+		const maxHeight = 5000;
 		const minHeight = 0;
 		const maxHeights = new Array(positions.length).fill(maxHeight);
 		const minHeights = new Array(positions.length).fill(minHeight);
 		this.viewer.entities.add({
-			wall: {
+			polyline: {
 				positions: positions,
-				maximumHeights: maxHeights,
-				minimumHeights: minHeights,
+				width: 5,
 				material: new FlowImageProperty({
 					image: "https://c-ssl.dtstatic.com/uploads/item/201410/08/20141008205803_ua2md.thumb.1000_0.jpeg",
-					repeat: new Cesium.Cartesian2(1, 1),
-					flowAxis: "x",
-					duration: 10,
+					repeat: new Cesium.Cartesian2(1000, 1),
+					flowAxis: true,
+					duration: 3,
 					dt: 0,
 					color: Cesium.Color.WHITE,
 				}),
+				clampToGround: true,
 			},
 		});
 		this.viewer.camera.setView({
