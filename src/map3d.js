@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
+import FlowImageProperty from "./FlowImageProperty";
 
 class Map3D {
 	initMap(container) {
@@ -9,10 +10,14 @@ class Map3D {
 			animation: false,
 			shouldAnimate: true,
 		});
+		window.viewer = this.viewer;
+		window.Cesium = Cesium;
+		window.map3d = this;
 		// this.drawRadarEntity();
 		// this.drawRadarPrimitive();
 		// this.drawScanRadarPrimitive();
-		this.drawFencePrimitive();
+		// this.drawFencePrimitive();
+		this.drawFlowWall();
 	}
 	//通过纹理贴图
 	drawRadarEntity() {
@@ -212,14 +217,14 @@ class Map3D {
                 return m;
             }
 		`;
-		
+
 		this.viewer.scene.primitives.add(
 			new Cesium.Primitive({
 				geometryInstances: {
 					geometry: new Cesium.WallGeometry({
 						positions: positions,
 						maximumHeights: maxHeights,
-						minimumHeights:minHeights
+						minimumHeights: minHeights,
 					}),
 					modelMatrix: Cesium.Matrix4.IDENTITY,
 				},
@@ -229,9 +234,9 @@ class Map3D {
 							type: "electronicFence",
 							uniforms: {
 								maxHeight: maxHeight,
-								minHeight:minHeight,
+								minHeight: minHeight,
 								scanHeight: 20000.0,
-								scanSpeed: 500.0
+								scanSpeed: 500.0,
 							},
 							source: shaderSource,
 						},
@@ -243,6 +248,43 @@ class Map3D {
 			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
 			new Cesium.HeadingPitchRange(0, -15, 100000)
 		);
+	}
+	// 自定义着色器实现流动墙体
+	drawFlowWall() {
+		const positions = [
+			Cesium.Cartesian3.fromDegrees(120, 30),
+			Cesium.Cartesian3.fromDegrees(121, 30),
+			Cesium.Cartesian3.fromDegrees(121, 31),
+			Cesium.Cartesian3.fromDegrees(120, 31),
+			Cesium.Cartesian3.fromDegrees(120, 30),
+		];
+		const maxHeight = 10000;
+		const minHeight = 0;
+		const maxHeights = new Array(positions.length).fill(maxHeight);
+		const minHeights = new Array(positions.length).fill(minHeight);
+		this.viewer.entities.add({
+			wall: {
+				positions: positions,
+				maximumHeights: maxHeights,
+				minimumHeights: minHeights,
+				material: new FlowImageProperty({
+					image: "https://c-ssl.dtstatic.com/uploads/item/201410/08/20141008205803_ua2md.thumb.1000_0.jpeg",
+					repeat: new Cesium.Cartesian2(1, 1),
+					flowAxis: "x",
+					duration: 10,
+					dt: 0,
+					color: Cesium.Color.WHITE,
+				}),
+			},
+		});
+		this.viewer.camera.setView({
+			destination: Cesium.Cartesian3.fromDegrees(120.5, 30.5, 30000),
+			orientation: new Cesium.HeadingPitchRoll(
+				5.593051530511038,
+				-0.4151772233250226,
+				0
+			),
+		});
 	}
 }
 export default new Map3D();
