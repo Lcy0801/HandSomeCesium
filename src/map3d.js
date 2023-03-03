@@ -25,6 +25,7 @@ class Map3D {
 			return [point.x, point.y, point.z];
 		});
 		const [a, b, c] = planeFit(flattenAreaWC_);
+		debugger;
 		const flattenAreaCenter_ = flattenAreaWC.reduce(
 			(previousV, cueerntV) => {
 				return Cesium.Cartesian3.add(
@@ -48,7 +49,7 @@ class Map3D {
 			},
 			flattenAreaCenter: {
 				type: Cesium.UniformType.VEC3,
-				value:flattenAreaCenter
+				value: flattenAreaCenter,
 			},
 			point1: {
 				type: Cesium.UniformType.VEC3,
@@ -56,15 +57,15 @@ class Map3D {
 			},
 			point2: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaCenter[1],
+				value: flattenAreaWC[1],
 			},
 			point3: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaCenter[2],
+				value: flattenAreaWC[2],
 			},
 			point4: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaCenter,
+				value: flattenAreaWC[3],
 			},
 		};
 		// 拟合模型平面
@@ -73,17 +74,28 @@ class Map3D {
     		vec4 positionMC_ = vec4(vsInput.attributes.positionMC , 1);
 			vec4 positionWC_ = czm_model * positionMC_;
 			float lambda = (dot(planeNormal , positionWC_.xyz) - dot(planeNormal , flattenAreaCenter)) / dot(planeNormal , planeNormal);
-			vec4 positionOnPlane = positionWC_.xyz - lambda * planeNormal;
+			vec3 positionOnPlane = positionWC_.xyz - lambda * planeNormal;
+			vec3 v1 = normalize(point1 - positionOnPlane);
+			vec3 v2 = normalize(point2 - positionOnPlane);
+			vec3 v3 = normalize(point3 - positionOnPlane);
+			vec3 v4 = normalize(point4 - positionOnPlane);
+			float angle = acos(dot(v1 , v2 )) + acos(dot(v2 , v3 )) + acos(dot(v3 , v4 )) + acos(dot(v4 , v1 ));
+			float pi = 3.1415926;
+			if ( abs(angle - 2.0*pi) < 0.1){
+				vec4 positionOnPlane_ = vec4( positionOnPlane , 1);
+				positionMC_ = czm_inverseModel * positionOnPlane_;
+			}
+			vsOutput.positionMC = positionMC_.xyz;
   		}
 		`;
 		const tileset = this.viewer.scene.primitives.add(
 			new Cesium.Cesium3DTileset({
 				url: Cesium.IonResource.fromAssetId(354759),
 				show: true,
-				customeShader: new Cesium.CustomShader({
+				customShader: new Cesium.CustomShader({
 					uniforms: uniforms,
-					vertexShaderText:vertexShaderText
-				})
+					vertexShaderText: vertexShaderText,
+				}),
 			})
 		);
 		window.tileset = tileset;
