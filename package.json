@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@turf/turf": "^6.5.0",
     "cesium": "^1.100.0",
+    "turf": "^3.0.14",
     "vue": "^3.2.45"
   },
   "devDependencies": {

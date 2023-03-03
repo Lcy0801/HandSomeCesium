@@ -1,6 +1,9 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
 import lineData from "./polyline.json";
+import * as turf from "@turf/turf";
+window.turf = turf;
+
 
 class Map3D {
 	initMap(container) {
