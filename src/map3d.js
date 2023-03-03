@@ -1,9 +1,6 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
-import lineData from "./polyline.json";
-import * as turf from "@turf/turf";
-window.turf = turf;
-
+import FlowImageProperty from "./FlowImageProperty";
 
 class Map3D {
 	initMap(container) {
@@ -15,12 +12,12 @@ class Map3D {
 		});
 		window.viewer = this.viewer;
 		window.Cesium = Cesium;
+		window.map3d = this;
 		// this.drawRadarEntity();
 		// this.drawRadarPrimitive();
 		// this.drawScanRadarPrimitive();
 		// this.drawFencePrimitive();
-		// this.drawFlowLine();
-        this.drawFlowFencePrimitive();
+		this.drawFlowWall();
 	}
 	//通过纹理贴图
 	drawRadarEntity() {
@@ -252,7 +249,8 @@ class Map3D {
 			new Cesium.HeadingPitchRange(0, -15, 100000)
 		);
 	}
-	drawFlowFencePrimitive() {
+	// 自定义着色器实现流动墙体
+	drawFlowWall() {
 		const positions = [
 			Cesium.Cartesian3.fromDegrees(120, 30),
 			Cesium.Cartesian3.fromDegrees(121, 30),
@@ -260,90 +258,33 @@ class Map3D {
 			Cesium.Cartesian3.fromDegrees(120, 31),
 			Cesium.Cartesian3.fromDegrees(120, 30),
 		];
-		const maxHeight = 50000;
+		const maxHeight = 5000;
 		const minHeight = 0;
 		const maxHeights = new Array(positions.length).fill(maxHeight);
 		const minHeights = new Array(positions.length).fill(minHeight);
-		const shaderSource = `
-			czm_material czm_getMaterial(czm_materialInput materialInput)
-            {
-                czm_material m = czm_getDefaultMaterial(materialInput);
-				if (m.alpha==0.0)
-				{
-					m.alpha = 1.0;
-				}
-                return m;
-            }
-		`;
-
-		this.viewer.scene.primitives.add(
-			new Cesium.Primitive({
-				geometryInstances: {
-					geometry: new Cesium.WallGeometry({
-						positions: positions,
-						maximumHeights: maxHeights,
-						minimumHeights: minHeights,
-					}),
-					modelMatrix: Cesium.Matrix4.IDENTITY,
-				},
-				appearance: new Cesium.MaterialAppearance({
-					material: new Cesium.Material({
-						fabric: {
-							type: "Image",
-							uniforms: {
-								image: "lineArrow2.png",
-								repeat: new Cesium.Cartesian2(1,1),
-							},
-						},
-					}),
+		this.viewer.entities.add({
+			polyline: {
+				positions: positions,
+				width: 5,
+				material: new FlowImageProperty({
+					image: "https://c-ssl.dtstatic.com/uploads/item/201410/08/20141008205803_ua2md.thumb.1000_0.jpeg",
+					repeat: new Cesium.Cartesian2(1000, 1),
+					flowAxis: true,
+					duration: 3,
+					dt: 0,
+					color: Cesium.Color.WHITE,
 				}),
-			})
-		);
-		this.viewer.camera.lookAt(
-			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
-			new Cesium.HeadingPitchRange(0, -15, 100000)
-		);
-	}
-	//自定义着色器实现流动线
-	drawFlowLine() {
-		const positions = [
-			Cesium.Cartesian3.fromDegrees(120, 30, 100),
-			Cesium.Cartesian3.fromDegrees(121, 30, 100),
-			Cesium.Cartesian3.fromDegrees(121, 31, 100),
-			Cesium.Cartesian3.fromDegrees(120, 31, 100),
-			Cesium.Cartesian3.fromDegrees(120, 30, 100),
-		];
-		const polylinePrimitive = this.viewer.scene.primitives.add(
-			new Cesium.Primitive({
-				geometryInstances: {
-					geometry: new Cesium.PolylineGeometry({
-						positions: positions,
-						width: 3,
-					}),
-					modelMatrix: Cesium.Matrix4.IDENTITY,
-					attributes: {
-						color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-							new Cesium.Color(1.0, 0.0, 0.0, 1.0)
-						),
-					},
-				},
-				appearance: new Cesium.MaterialAppearance({
-					material: new Cesium.Material({
-						fabric: {
-							type: "Image",
-							uniforms: {
-								image: "../images/Cesium_Logo_Color.jpg",
-								repeat: new Cesium.Cartesian2(1, 1),
-							},
-						},
-					}),
-				}),
-			})
-		);
-		this.viewer.camera.lookAt(
-			Cesium.Cartesian3.fromDegrees(120.5, 30.5),
-			new Cesium.HeadingPitchRange(0, -15, 100000)
-		);
+				clampToGround: true,
+			},
+		});
+		this.viewer.camera.setView({
+			destination: Cesium.Cartesian3.fromDegrees(120.5, 30.5, 30000),
+			orientation: new Cesium.HeadingPitchRoll(
+				5.593051530511038,
+				-0.4151772233250226,
+				0
+			),
+		});
 	}
 }
 export default new Map3D();
