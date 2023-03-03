@@ -1,16 +1,5 @@
 <script setup lang="ts">
-import { number } from "mathjs";
-import { provide, ref, watch } from "vue";
 import CesiumMap from "./components/CesiumMap.vue";
-const num = ref<number>(0);
-provide("num", num);
-watch(
-	num,
-	(newValue, oldValue) => {
-		console.log(`新:${newValue};旧:${oldValue}`);
-	},
-	{ immediate: true }
-);
 </script>
 
 <template>

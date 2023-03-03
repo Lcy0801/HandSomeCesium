@@ -10,74 +10,84 @@ class Map3D {
 			animation: false,
 			shouldAnimate: true,
 		});
-		const flattenAreaWC = Cesium.Cartesian3.fromDegreesArray([
-			-71.05546970246004, 42.35253974644013,
-			-71.0558516046633, 42.3517911739237,
-			-71.0574638361963, 42.3521936048791,
-			-71.05706149040155, 42.352934202982,
+		const flattenAreaWC = Cesium.Cartesian3.fromDegreesArrayHeights([
+			-71.05546970246004, 42.35253974644013, 10, -71.0558516046633,
+			42.3517911739237, 10, -71.0574638361963, 42.3521936048791, 10,
+			-71.05706149040155, 42.352934202982, 10,
 		]);
-		const modelMatrix = Cesium.Matrix4.IDENTITY;
-		const modelMatrixInv = Cesium.Matrix4.inverse(modelMatrix, new Cesium.Matrix4());
-		const flattenAreaMC = flattenAreaWC.map(point => {
-			return Cesium.Matrix4.multiplyByPoint(modelMatrixInv, point,new Cesium.Cartesian3());
+		this.viewer.entities.add({
+			polyline: {
+				positions: [...flattenAreaWC, flattenAreaWC[0]],
+				material: Cesium.Color.RED,
+			},
 		});
-		const flattenAreaMC_ = flattenAreaMC.map((pointMC) => {
-			return [pointMC.x, pointMC.y, pointMC.z];
+		const flattenAreaWC_ = flattenAreaWC.map((point) => {
+			return [point.x, point.y, point.z];
 		});
-		const [a, b, c] = planeFit(flattenAreaMC_);
-		console.log("模型空间的平面方程", [a, b, c]);
+		const [a, b, c] = planeFit(flattenAreaWC_);
+		const flattenAreaCenter_ = flattenAreaWC.reduce(
+			(previousV, cueerntV) => {
+				return Cesium.Cartesian3.add(
+					previousV,
+					cueerntV,
+					new Cesium.Cartesian3()
+				);
+			},
+			new Cesium.Cartesian3()
+		);
+		const flattenAreaCenter = Cesium.Cartesian3.divideByScalar(
+			flattenAreaCenter_,
+			flattenAreaWC.length,
+			new Cesium.Cartesian3()
+		);
 		// 着色器uniforms
 		const uniforms = {
-			planeNormalMC: {
+			planeNormal: {
 				type: Cesium.UniformType.VEC3,
 				value: new Cesium.Cartesian3(a, b, c),
 			},
+			flattenAreaCenter: {
+				type: Cesium.UniformType.VEC3,
+				value:flattenAreaCenter
+			},
 			point1: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaMC[0],
+				value: flattenAreaWC[0],
 			},
 			point2: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaMC[1],
+				value: flattenAreaCenter[1],
 			},
 			point3: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaMC[2],
+				value: flattenAreaCenter[2],
 			},
 			point4: {
 				type: Cesium.UniformType.VEC3,
-				value: flattenAreaMC[3],
-			}
+				value: flattenAreaCenter,
+			},
 		};
 		// 拟合模型平面
+		const vertexShaderText = `
+		void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+    		vec4 positionMC_ = vec4(vsInput.attributes.positionMC , 1);
+			vec4 positionWC_ = czm_model * positionMC_;
+			float lambda = (dot(planeNormal , positionWC_.xyz) - dot(planeNormal , flattenAreaCenter)) / dot(planeNormal , planeNormal);
+			vec4 positionOnPlane = positionWC_.xyz - lambda * planeNormal;
+  		}
+		`;
 		const tileset = this.viewer.scene.primitives.add(
 			new Cesium.Cesium3DTileset({
 				url: Cesium.IonResource.fromAssetId(354759),
-				customShader: new Cesium.CustomShader({
+				show: true,
+				customeShader: new Cesium.CustomShader({
 					uniforms: uniforms,
-					vertexShaderText: `
-					void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput)
-					{
-						vec3 positionMC = vsInput.attributes.positionMC;
-						float r = (dot(planeNormalMC,positionMC)+1.0)/pow(length(planeNormalMC),2.0);
-						vec3 positionMC_ = positionMC - r * planeNormalMC;
-						vec3 v1 = normalize(point1 - positionMC_);
-						vec3 v2 = normalize(point2 - positionMC_);
-						vec3 v3 = normalize(point3 - positionMC_);
-						vec3 v4 = normalize(point4 - positionMC_);
-						float angle1 = degrees(acos(dot(v1 , v2)));
-						float angle2 = degrees(acos(dot(v2 , v3)));
-						float angle3 = degrees(acos(dot(v3 , v4)));
-						float angle4 = degrees(acos(dot(v4 , v1)));
-						float angle = angle1 + angle2 + angle3 + angle4;
-						
-					}
-					`,
-				}),
+					vertexShaderText:vertexShaderText
+				})
 			})
 		);
+		window.tileset = tileset;
 		this.viewer.flyTo(tileset);
-		window.x = tileset;
 		const that = this;
 		this.viewer.screenSpaceEventHandler.setInputAction((event) => {
 			const position = that.viewer.scene.pickPosition(event.position);
