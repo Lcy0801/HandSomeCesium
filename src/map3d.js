@@ -1,6 +1,10 @@
 import * as Cesium from "cesium";
 import { CesiumToken } from "./mapconfig";
 import { planeFit } from "./utils";
+import flattenData from "./flattenArea.json";
+
+// 默认的压平高度
+const defaultFlattenHeight = 0;
 class Map3D {
 	initMap(container) {
 		Cesium.Ion.defaultAccessToken = CesiumToken;
@@ -11,57 +15,90 @@ class Map3D {
 		});
 		window.viewer = this.viewer;
 		window.Cesium = Cesium;
-		const flattenArea1 = Cesium.Cartesian3.fromDegreesArrayHeights([
-			121.4988858909487, 31.34415169062114, 50, 121.49925497154068,
-			31.344619986191827, 50, 121.49986716305746, 31.344310255297167, 50,
-			121.49951284659198, 31.34372913569769, 50, 121.4988858909487,
-			31.34415169062114, 50,
-		]);
-		const flattenArea1Options = this.processFlattenArea(flattenArea1);
-		const flattenArea2 = Cesium.Cartesian3.fromDegreesArrayHeights([
-			121.49977897931433, 31.34484196930245, 30, 121.50016410643715,
-			31.345365834152133, 30, 121.50081215161593, 31.34505568888909, 30,
-			121.50039272026851, 31.344529830113085, 30, 121.49977897931433,
-			31.34484196930245, 30,
-		]);
-		const flattenArea2Options = this.processFlattenArea(flattenArea2);
-		const flattenAreaPoints = [].concat(
-			flattenArea1Options.flattenAreaWCxyz,
-			flattenArea2Options.flattenAreaWCxyz
-		);
-		const flattenAreaParameters = [].concat(
-			flattenArea1Options.planeNormal,
-			[
-				flattenArea1Options.center.x,
-				flattenArea1Options.center.y,
-				flattenArea1Options.center.z,
-			],
-			[0.0, 4.0, 5.0],
-			flattenArea2Options.planeNormal,
-			[
-				flattenArea2Options.center.x,
-				flattenArea2Options.center.y,
-				flattenArea2Options.center.z,
-			],
-			[5.0, 9.0, 5.0]
-		);
+		const flattenAreas = [];
+		flattenData.features.forEach((feature) => {
+			if (feature.geometry.type.toLowerCase() === "polygon") {
+				const flattenAreaPoints = feature.geometry.coordinates[0].map(
+					(poi) => {
+						if (poi.length === 2) {
+							return Cesium.Cartesian3.fromDegrees(
+								poi[0],
+								poi[1],
+								defaultFlattenHeight
+							);
+						} else {
+							return Cesium.Cartesian3.fromDegrees(
+								poi[0],
+								poi[1],
+								poi[2]
+							);
+						}
+					}
+				);
+				flattenAreas.push(flattenAreaPoints);
+			} else {
+				feature.geometry.coordinates.forEach((polygon) => {
+					const flattenAreaPoints = polygon[0].map((poi) => {
+						if (poi.length === 2) {
+							return Cesium.Cartesian3.fromDegrees(
+								poi[0],
+								poi[1],
+								defaultFlattenHeight
+							);
+						} else {
+							return Cesium.Cartesian3.fromDegrees(
+								poi[0],
+								poi[1],
+								poi[2]
+							);
+						}
+					});
+					flattenAreas.push(flattenAreaPoints);
+				});
+			}
+		});
+
+		const flattenAreas_ = flattenAreas.map((flattenArea) => {
+			return this.processFlattenArea(flattenArea);
+		});
+		let flattenAreasParameters = [];
+		let flattenAreasPoints = [];
+
+		flattenAreas_.forEach((flattenAreaOption) => {
+			const startIndex = flattenAreasPoints.length / 3;
+			debugger;
+			const pointsNum = flattenAreaOption.flattenAreaWCxyz.length / 3;
+			const endIndex = startIndex + pointsNum - 1;
+			flattenAreasParameters = flattenAreasParameters.concat([
+				...flattenAreaOption.planeNormal,
+				flattenAreaOption.center.x,
+				flattenAreaOption.center.y,
+				flattenAreaOption.center.z,
+				startIndex,
+				endIndex,
+				pointsNum,
+			]);
+			flattenAreasPoints = flattenAreasPoints.concat(
+				flattenAreaOption.flattenAreaWCxyz
+			);
+		});
 		debugger;
 		// 着色器uniforms
 		const uniforms = {
 			//压平区域的个数
-			flattenAreaCount: {
+			flattenAreasCount: {
 				type: Cesium.UniformType.FLOAT,
-				value: 2.0,
+				value: flattenAreas_.length,
 			},
 			flattenAreasPointsCount: {
 				type: Cesium.UniformType.FLOAT,
-				value: 10.0,
+				value: flattenAreasPoints.length / 3,
 			},
 			//以纹理贴图的形式记录每一个压平区域的法线、重心坐标和边界点起止索引
 			flattenAreasParameters: {
 				type: Cesium.UniformType.SAMPLER_2D,
 				value: new Cesium.TextureUniform({
-					typedArray: new Float32Array(flattenAreaParameters),
+					typedArray: new Float32Array(flattenAreasParameters),
 					width: 6,
 					height: 1,
 					pixelFormat: Cesium.PixelFormat.RGB,
@@ -70,11 +107,11 @@ class Map3D {
 				}),
 			},
 			//以纹理贴图的形式记录每一个压平区域的边界点坐标
-			flattenAreaPoints: {
+			flattenAreasPoints: {
 				type: Cesium.UniformType.SAMPLER_2D,
 				value: new Cesium.TextureUniform({
-					typedArray: new Float32Array(flattenAreaPoints),
-					width: flattenAreaPoints.length / 3,
+					typedArray: new Float32Array(flattenAreasPoints),
+					width: flattenAreasPoints.length / 3,
 					height: 1,
 					pixelFormat: Cesium.PixelFormat.RGB,
 					pixelDatatype: Cesium.PixelDatatype.FLOAT,
@@ -88,7 +125,7 @@ class Map3D {
 		void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
 			const float maxNumflattenAreas = 10.0;
 			const float maxNumflattenPoints = 100.0;
-			if(flattenAreaCount > maxNumflattenAreas || flattenAreasPointsCount > maxNumflattenAreas * maxNumflattenPoints)
+			if(flattenAreasCount > maxNumflattenAreas || flattenAreasPointsCount > maxNumflattenAreas * maxNumflattenPoints)
 			{
 				return;
 			}
@@ -97,13 +134,13 @@ class Map3D {
 			float pi = 3.1415926;
 			for (float i = 0.0; i < maxNumflattenAreas; i++)
 			{
-				if(i >= flattenAreaCount)
+				if(i >= flattenAreasCount)
 				{
 					break;
 				}
-				vec3 planeNormal = texture2D(flattenAreasParameters , vec2((i*3.0*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
-				vec3 flattenAreaCenter = texture2D(flattenAreasParameters , vec2(((i*3.0+1.0)*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
-				vec3 SEN = texture2D(flattenAreasParameters , vec2(((i*3.0+2.0)*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
+				vec3 planeNormal = texture2D(flattenAreasParameters , vec2((i*3.0*2.0+1.0)/(flattenAreasCount*3.0*2.0),0.5)).rgb;
+				vec3 flattenAreaCenter = texture2D(flattenAreasParameters , vec2(((i*3.0+1.0)*2.0+1.0)/(flattenAreasCount*3.0*2.0),0.5)).rgb;
+				vec3 SEN = texture2D(flattenAreasParameters , vec2(((i*3.0+2.0)*2.0+1.0)/(flattenAreasCount*3.0*2.0),0.5)).rgb;
 				float start = SEN.x;
 				float end = SEN.y;
 				float flattenAreaPointsCount = SEN.z;
@@ -122,8 +159,8 @@ class Map3D {
 					}
 					float index1 = start + j;
 					float index2 = index1 + 1.0;
-					vec3 point1 = texture2D(flattenAreaPoints , vec2( (index1 * 2.0 + 1.0)/(flattenAreasPointsCount * 2.0) , 0.5)).rgb;
-					vec3 point2 = texture2D(flattenAreaPoints , vec2( (index2 * 2.0 + 1.0)/(flattenAreasPointsCount * 2.0) , 0.5)).rgb;
+					vec3 point1 = texture2D(flattenAreasPoints , vec2( (index1 * 2.0 + 1.0)/(flattenAreasPointsCount * 2.0) , 0.5)).rgb;
+					vec3 point2 = texture2D(flattenAreasPoints , vec2( (index2 * 2.0 + 1.0)/(flattenAreasPointsCount * 2.0) , 0.5)).rgb;
 					vec3 v1 = normalize(point1 - positionOnPlane);
 					vec3 v2 = normalize(point2 - positionOnPlane);
 					angle = angle + acos(dot(v1 , v2 ));
