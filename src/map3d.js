@@ -66,6 +66,7 @@ class Map3D {
 					height: 1,
 					pixelFormat: Cesium.PixelFormat.RGB,
 					pixelDatatype: Cesium.PixelDatatype.FLOAT,
+					repeat: false,
 				}),
 			},
 			//以纹理贴图的形式记录每一个压平区域的边界点坐标
@@ -77,6 +78,7 @@ class Map3D {
 					height: 1,
 					pixelFormat: Cesium.PixelFormat.RGB,
 					pixelDatatype: Cesium.PixelDatatype.FLOAT,
+					repeat: false,
 				}),
 			},
 		};
@@ -99,10 +101,8 @@ class Map3D {
 				{
 					break;
 				}
-				vec3 planeNormal = texture2D(flattenAreasParameters , vec2(1.0/12.0,0.5)).rgb;
-				vec3 flattenAreaCenter = texture2D(flattenAreasParameters , vec2(3.0/12.0,0.5)).rgb;
-				flattenAreaCenter = vec3(-2848750.7508301996,4648869.6028831685,3298571.0520525915);
-				planeNormal = vec3(7.002574875514256e-8, -1.1427596291468944e-7, -8.162942322087474e-8);
+				vec3 planeNormal = texture2D(flattenAreasParameters , vec2((i*3.0*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
+				vec3 flattenAreaCenter = texture2D(flattenAreasParameters , vec2(((i*3.0+1.0)*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
 				vec3 SEN = texture2D(flattenAreasParameters , vec2(((i*3.0+2.0)*2.0+1.0)/(flattenAreaCount*3.0*2.0),0.5)).rgb;
 				float start = SEN.x;
 				float end = SEN.y;
@@ -128,7 +128,7 @@ class Map3D {
 					vec3 v2 = normalize(point2 - positionOnPlane);
 					angle = angle + acos(dot(v1 , v2 ));
 				}
-				if (true || abs(angle - 2.0 * pi) < 0.1){
+				if ( abs(angle - 2.0 * pi) < 0.1){
 					vec4 positionOnPlane_ = vec4( positionOnPlane , 1);
 					positionMC_ = czm_inverseModel * positionOnPlane_;
 					break;
